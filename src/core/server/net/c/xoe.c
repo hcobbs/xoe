@@ -59,7 +59,7 @@ void print_usage(const char *prog_name) {
     printf("Usage: %s [-i <interface>] [-p <port>] [-c <server_ip>:<server_port>]\n", prog_name);
     printf("  -i <interface>  Specify the network interface to listen on (e.g., eth0, lo).\n");
     printf("                  If not specified, listens on all available interfaces (0.0.0.0).\n");
-    printf("  -p <port>       Specify the port to listen on (default: %d).\n", DEFAULT_PORT);
+    printf("  -p <port>       Specify the port to listen on (default: %d).\n", SERVER_PORT);
     printf("  -c <server_ip>:<server_port> Connect to another server as a client.\n");
     printf("                  If this option is used, the program will act as a client instead of a server.\n");
 }
@@ -72,7 +72,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 #endif
-    int listen_port = DEFAULT_PORT;
+    int listen_port = SERVER_PORT;
     char *listen_address = NULL; // Default to INADDR_ANY (0.0.0.0)
     char *connect_server_ip = NULL;
     int connect_server_port = 0;
@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
         printf("Connected to server %s:%d\n", connect_server_ip, connect_server_port);
         printf("Enter messages to send (type 'exit' to quit):\n");
 
-        while (1) {
+        while (TRUE) {
             printf("> ");
             if (fgets(buffer, BUFFER_SIZE, stdin) == NULL) {
                 break; // EOF or error
