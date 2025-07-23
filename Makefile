@@ -8,9 +8,11 @@ CFLAGS = -Wall -Wextra -g -std=c99
 SRCDIR   = src
 BINDIR   = bin
 OBJDIR   = obj
+COMMONDIR= $(SRCDIR)/common
 COREDIR  = $(SRCDIR)/core
 NETDIR   = $(COREDIR)/server/net
 PACKETDIR= $(COREDIR)/packet_manager
+
 
 # Source files
 # Automatically find all .c files
@@ -21,7 +23,7 @@ SOURCES = $(wildcard $(NETDIR)/c/*.c)
 OBJECTS = $(patsubst $(NETDIR)/c/%.c,$(OBJDIR)/%.o,$(SOURCES))
 
 # Include paths for headers
-INCLUDES = -I$(NETDIR)/h -I$(PACKETDIR)/h
+INCLUDES = -I$(NETDIR)/h -I$(PACKETDIR)/h -I$(COMMONDIR)/h
 
 # Target executable
 TARGET_NAME = xoe

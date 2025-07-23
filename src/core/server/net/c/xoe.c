@@ -14,6 +14,11 @@
 #include <netinet/in.h>
 #endif
 
+/* 
+ *  Definitions needed by Xoe only... Standard C libraries should be cross-compile 
+ *  safe and appropriately included above
+ */
+#include "commonDefinitions.h"
 #include "xoe.h"
 
 typedef struct {
