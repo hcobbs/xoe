@@ -37,8 +37,9 @@ telnet localhost 12345
 ## Architecture
 
 ### Language Standard
-- **C99** (`-std=c99`) with strict warnings (`-Wall -Wextra`)
+- **ANSI-C (C89)** (`-std=c89 -pedantic`) with strict warnings (`-Wall -Wextra`)
 - Cross-platform support for Linux, macOS, and Windows
+- Fixed-width integer types (`uint16_t`, `uint32_t`) defined via typedefs (C89 doesn't have `stdint.h`)
 
 ### Directory Structure
 ```

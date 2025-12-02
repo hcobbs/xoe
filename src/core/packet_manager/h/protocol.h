@@ -1,7 +1,9 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
-#include <stdint.h> // For fixed-width integer types like uint16_t
+/* C89-compatible fixed-width integer types */
+typedef unsigned short uint16_t;
+typedef unsigned int uint32_t;
 
 
 
@@ -24,30 +26,30 @@ typedef struct {
  * been parsed from a received byte stream.
  */
 typedef struct {
-    // The unique identifier for the encapsulated protocol.
+    /* The unique identifier for the encapsulated protocol. */
     uint16_t protocol_id;
-    // The version of the encapsulated protocol.
+    /* The version of the encapsulated protocol. */
     uint16_t protocol_version;
-    // A pointer to the structure holding the payload data and its length.
+    /* A pointer to the structure holding the payload data and its length. */
     xoe_payload_t* payload;
-    // A checksum calculated over the packet contents to ensure data integrity.
+    /* A checksum calculated over the packet contents to ensure data integrity. */
     uint32_t checksum;
 } xoe_packet_t;
 
-// An opaque pointer to a struct that will hold protocol-specific session data.
-// The core server doesn't need to know the contents of this struct.
+/* An opaque pointer to a struct that will hold protocol-specific session data. */
+/* The core server doesn't need to know the contents of this struct. */
 struct protocol_session;
 
-// Defines the interface (a "contract") for any protocol handler.
+/* Defines the interface (a "contract") for any protocol handler. */
 typedef struct {
-    // A human-readable name for the protocol.
+    /* A human-readable name for the protocol. */
     const char* name;
-    // Called to initialize a new session when a client connects.
+    /* Called to initialize a new session when a client connects. */
     struct protocol_session* (*init_session)(int client_socket);
-    // Called when there is data to be read from the client.
+    /* Called when there is data to be read from the client. */
     void (*handle_data)(struct protocol_session* session);
-    // Called to clean up a session when the connection is closed.
+    /* Called to clean up a session when the connection is closed. */
     void (*cleanup_session)(struct protocol_session* session);
 } protocol_handler_t;
 
-#endif // PROTOCOL_H
+#endif /* PROTOCOL_H */

@@ -24,7 +24,49 @@
 typedef struct {
     int client_socket;
     struct sockaddr_in client_addr;
+    int in_use;
 } client_info_t;
+
+/* Global fixed-size client pool */
+static client_info_t client_pool[MAX_CLIENTS];
+static pthread_mutex_t pool_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Acquire a client slot from the pool */
+static client_info_t* acquire_client_slot(void) {
+    int i;
+    client_info_t *slot = NULL;
+
+    pthread_mutex_lock(&pool_mutex);
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        if (!client_pool[i].in_use) {
+            client_pool[i].in_use = 1;
+            slot = &client_pool[i];
+            break;
+        }
+    }
+    pthread_mutex_unlock(&pool_mutex);
+
+    return slot;
+}
+
+/* Release a client slot back to the pool */
+static void release_client_slot(client_info_t *slot) {
+    if (slot != NULL) {
+        pthread_mutex_lock(&pool_mutex);
+        slot->in_use = 0;
+        slot->client_socket = -1;
+        pthread_mutex_unlock(&pool_mutex);
+    }
+}
+
+/* Initialize the client pool */
+static void init_client_pool(void) {
+    int i;
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        client_pool[i].in_use = 0;
+        client_pool[i].client_socket = -1;
+    }
+}
 
 void *handle_client(void *arg) {
     client_info_t *client_info = (client_info_t *)arg;
@@ -42,7 +84,7 @@ void *handle_client(void *arg) {
     while ((bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0)) > 0) {
         buffer[bytes_received] = '\0';
         printf("Received from %s:%d: %s", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), buffer);
-        send(client_socket, buffer, bytes_received, 0); // Echo back
+        send(client_socket, buffer, bytes_received, 0); /* Echo back */
     }
 
     if (bytes_received == 0) {
@@ -56,7 +98,7 @@ void *handle_client(void *arg) {
 #else
     close(client_socket);
 #endif
-    free(client_info);
+    release_client_slot(client_info);
     pthread_exit(NULL);
 }
 
@@ -70,6 +112,13 @@ void print_usage(const char *prog_name) {
 }
 
 int main(int argc, char *argv[]) {
+    int listen_port = SERVER_PORT;
+    char *listen_address = NULL; /* Default to INADDR_ANY (0.0.0.0) */
+    char *connect_server_ip = NULL;
+    int connect_server_port = 0;
+    int opt = 0;
+    char *colon = NULL;
+
 #ifdef _WIN32
     WSADATA wsa_data;
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
@@ -77,12 +126,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 #endif
-    int listen_port = SERVER_PORT;
-    char *listen_address = NULL; // Default to INADDR_ANY (0.0.0.0)
-    char *connect_server_ip = NULL;
-    int connect_server_port = 0;
 
-    int opt;
     while ((opt = getopt(argc, argv, "i:p:c:")) != -1) {
         switch (opt) {
             case 'i':
@@ -96,8 +140,8 @@ int main(int argc, char *argv[]) {
                     exit(EXIT_FAILURE);
                 }
                 break;
-            case 'c': {
-                char *colon = strchr(optarg, ':');
+            case 'c':
+                colon = strchr(optarg, ':');
                 if (colon == NULL) {
                     fprintf(stderr, "Invalid server address format. Expected <ip>:<port>.\n");
                     print_usage(argv[0]);
@@ -105,14 +149,13 @@ int main(int argc, char *argv[]) {
                 }
                 *colon = '\0';
                 connect_server_ip = optarg;
-                connect_server_port = atoi(colon + 1); 
+                connect_server_port = atoi(colon + 1);
                 if (connect_server_port <= 0 || connect_server_port > 65535) {
                     fprintf(stderr, "Invalid server port number: %s\n", colon + 1);
                     print_usage(argv[0]);
                     exit(EXIT_FAILURE);
                 }
                 break;
-            }
             default:
                 print_usage(argv[0]);
                 exit(EXIT_FAILURE);
@@ -120,10 +163,11 @@ int main(int argc, char *argv[]) {
     }
 
     if (connect_server_ip != NULL) {
-        // Act as a client
+        /* Act as a client */
         int sock = 0;
         struct sockaddr_in serv_addr;
         char buffer[BUFFER_SIZE] = {0};
+        int bytes_received = 0;
 
         if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
             perror("Socket creation error");
@@ -149,10 +193,10 @@ int main(int argc, char *argv[]) {
         while (TRUE) {
             printf("> ");
             if (fgets(buffer, BUFFER_SIZE, stdin) == NULL) {
-                break; // EOF or error
+                break; /* EOF or error */
             }
 
-            // Remove newline character if present
+            /* Remove newline character if present */
             buffer[strcspn(buffer, "\n")] = 0;
 
             if (strcmp(buffer, "exit") == 0) {
@@ -160,7 +204,7 @@ int main(int argc, char *argv[]) {
             }
 
             send(sock, buffer, strlen(buffer), 0);
-            int bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
+            bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
             if (bytes_received > 0) {
                 buffer[bytes_received] = '\0';
                 printf("Server response: %s\n", buffer);
@@ -181,20 +225,23 @@ int main(int argc, char *argv[]) {
         printf("Client disconnected.\n");
 
     } else {
-        // Act as a server
-        int server_fd, new_socket;
+        /* Act as a server */
+        int server_fd = 0;
+        int new_socket = 0;
         struct sockaddr_in address;
         int addrlen = sizeof(address);
+        client_info_t *client_info = NULL;
+        pthread_t thread_id;
 
-        // Create socket file descriptor
+        /* Create socket file descriptor */
         if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
             perror("socket failed");
             exit(EXIT_FAILURE);
         }
 
-        // Set up address structure
+        /* Set up address structure */
         address.sin_family = AF_INET;
-        address.sin_addr.s_addr = INADDR_ANY; // Default to all interfaces
+        address.sin_addr.s_addr = INADDR_ANY; /* Default to all interfaces */
         if (listen_address != NULL) {
             if (inet_pton(AF_INET, listen_address, &address.sin_addr) <= 0) {
                 fprintf(stderr, "Invalid listen address: %s\n", listen_address);
@@ -203,41 +250,56 @@ int main(int argc, char *argv[]) {
         }
         address.sin_port = htons(listen_port);
 
-        // Bind the socket to the specified IP and port
+        /* Bind the socket to the specified IP and port */
         if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
             perror("bind failed");
             exit(EXIT_FAILURE);
         }
 
-        // Listen for incoming connections
+        /* Listen for incoming connections */
         if (listen(server_fd, 10) < 0) {
             perror("listen");
             exit(EXIT_FAILURE);
         }
 
+        /* Initialize the client pool */
+        init_client_pool();
+
         printf("Server listening on %s:%d\n", (listen_address == NULL) ? "0.0.0.0" : listen_address, listen_port);
 
         while (TRUE) {
-            client_info_t *client_info = (client_info_t *)malloc(sizeof(client_info_t));
+            client_info = acquire_client_slot();
             if (client_info == NULL) {
-                perror("malloc failed");
+                fprintf(stderr, "Max clients (%d) reached, rejecting connection\n", MAX_CLIENTS);
+                /* Still need to accept and close to prevent backlog */
+                new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+                if (new_socket >= 0) {
+#ifdef _WIN32
+                    closesocket(new_socket);
+#else
+                    close(new_socket);
+#endif
+                }
                 continue;
             }
 
             if ((new_socket = accept(server_fd, (struct sockaddr *)&client_info->client_addr, (socklen_t *)&addrlen)) < 0) {
                 perror("accept");
-                free(client_info);
+                release_client_slot(client_info);
                 continue;
             }
             client_info->client_socket = new_socket;
 
-            pthread_t thread_id;
             if (pthread_create(&thread_id, NULL, handle_client, (void *)client_info) != 0) {
                 perror("pthread_create failed");
+#ifdef _WIN32
+                closesocket(new_socket);
+#else
                 close(new_socket);
-                free(client_info);
+#endif
+                release_client_slot(client_info);
             }
-            pthread_detach(thread_id); // Detach thread to clean up resources automatically
+            pthread_detach(thread_id); /* Detach thread to clean up resources automatically */
         }
 
 #ifdef _WIN32
@@ -249,4 +311,3 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
-                

@@ -1,11 +1,11 @@
 #ifndef COMMON_DEFINITIONS_H
 #define COMMON_DEFINITIONS_H
 
-// Boolean Logic Defines
+/* Boolean Logic Defines */
 #define TRUE  1
 #define FALSE 0
 
-// Error Definitions
+/* Error Definitions */
 #define E_UNKNOWN_ERROR        -1
 #define E_INVALID_ARGUMENT     -2
 #define E_OUT_OF_MEMORY        -3
@@ -17,4 +17,4 @@
 #define E_NOT_IMPLEMENTED      -9
 #define E_BUFFER_TOO_SMALL    -10
 
-#endif // COMMON_DEFINITIONS_H
+#endif /* COMMON_DEFINITIONS_H */
