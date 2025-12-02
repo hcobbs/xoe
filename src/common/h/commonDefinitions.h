@@ -17,4 +17,12 @@
 #define E_NOT_IMPLEMENTED      -9
 #define E_BUFFER_TOO_SMALL    -10
 
+/* TLS-specific Error Definitions */
+#define E_TLS_HANDSHAKE_FAILED -11
+#define E_TLS_CERT_INVALID     -12
+#define E_TLS_CERT_EXPIRED     -13
+#define E_TLS_VERSION_MISMATCH -14
+#define E_TLS_CIPHER_MISMATCH  -15
+#define E_TLS_PROTOCOL_ERROR   -16
+
 #endif /* COMMON_DEFINITIONS_H */

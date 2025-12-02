@@ -3,33 +3,45 @@
 #include <string.h>
 #include <pthread.h>
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
-#else
+/* POSIX/Unix headers only - Windows support removed */
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#endif
 
-/* 
- *  Definitions needed by Xoe only... Standard C libraries should be cross-compile 
+/*
+ *  Definitions needed by Xoe only... Standard C libraries should be cross-compile
  *  safe and appropriately included above
  */
 #include "commonDefinitions.h"
 #include "xoe.h"
 
+/* TLS includes - include config first to get TLS_ENABLED */
+#include "tls_config.h"
+#if TLS_ENABLED
+#include "tls_context.h"
+#include "tls_session.h"
+#include "tls_io.h"
+#include "tls_error.h"
+#endif
+
 typedef struct {
     int client_socket;
     struct sockaddr_in client_addr;
     int in_use;
+#if TLS_ENABLED
+    SSL* tls_session;
+#endif
 } client_info_t;
 
 /* Global fixed-size client pool */
 static client_info_t client_pool[MAX_CLIENTS];
 static pthread_mutex_t pool_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Global TLS context (read-only after initialization, thread-safe) */
+#if TLS_ENABLED
+static SSL_CTX* g_tls_ctx = NULL;
+#endif
 
 /* Acquire a client slot from the pool */
 static client_info_t* acquire_client_slot(void) {
@@ -75,23 +87,81 @@ void *handle_client(void *arg) {
     char buffer[BUFFER_SIZE];
     int bytes_received;
 
-#ifdef _WIN32
-    printf("Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-#else
-    printf("Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+#if TLS_ENABLED
+    SSL* tls = NULL;
 #endif
 
-    while ((bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0)) > 0) {
+    printf("Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+#if TLS_ENABLED
+    /* Perform TLS handshake (if encryption enabled) */
+    if (g_tls_ctx != NULL) {
+        tls = tls_session_create(g_tls_ctx, client_socket);
+        if (tls == NULL) {
+            fprintf(stderr, "TLS handshake failed with %s:%d: %s\n",
+                    inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port),
+                    tls_get_error_string());
+            goto cleanup;
+        }
+        client_info->tls_session = tls;
+        printf("TLS handshake successful with %s:%d\n",
+               inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+    }
+#endif
+
+    /* Echo loop - use TLS or plain TCP based on runtime mode */
+    while (1) {
+#if TLS_ENABLED
+        if (tls != NULL) {
+            bytes_received = tls_read(tls, buffer, BUFFER_SIZE - 1);
+        } else {
+            bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+        }
+#else
+        bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+#endif
+        if (bytes_received <= 0) {
+            break;
+        }
+
         buffer[bytes_received] = '\0';
         printf("Received from %s:%d: %s", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), buffer);
-        send(client_socket, buffer, bytes_received, 0); /* Echo back */
+
+#if TLS_ENABLED
+        if (tls != NULL) {
+            if (tls_write(tls, buffer, bytes_received) <= 0) {
+                fprintf(stderr, "TLS write failed\n");
+                break;
+            }
+        } else {
+            send(client_socket, buffer, bytes_received, 0);
+        }
+#else
+        send(client_socket, buffer, bytes_received, 0);
+#endif
     }
 
     if (bytes_received == 0) {
         printf("Client %s:%d disconnected\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
     } else if (bytes_received == -1) {
+#if TLS_ENABLED
+        if (tls != NULL) {
+            fprintf(stderr, "TLS read error: %s\n", tls_get_error_string());
+        } else {
+            perror("recv failed");
+        }
+#else
         perror("recv failed");
+#endif
     }
+
+cleanup:
+#if TLS_ENABLED
+    if (tls != NULL) {
+        tls_session_shutdown(tls);
+        tls_session_destroy(tls);
+    }
+#endif
 
 #ifdef _WIN32
     closesocket(client_socket);
@@ -103,12 +173,35 @@ void *handle_client(void *arg) {
 }
 
 void print_usage(const char *prog_name) {
-    printf("Usage: %s [-i <interface>] [-p <port>] [-c <server_ip>:<server_port>]\n", prog_name);
-    printf("  -i <interface>  Specify the network interface to listen on (e.g., eth0, lo).\n");
-    printf("                  If not specified, listens on all available interfaces (0.0.0.0).\n");
-    printf("  -p <port>       Specify the port to listen on (default: %d).\n", SERVER_PORT);
-    printf("  -c <server_ip>:<server_port> Connect to another server as a client.\n");
-    printf("                  If this option is used, the program will act as a client instead of a server.\n");
+    printf("Usage: %s [OPTIONS]\n\n", prog_name);
+    printf("Server Mode Options:\n");
+    printf("  -i <interface>    Network interface to bind (default: 0.0.0.0, all interfaces)\n");
+    printf("                    Examples: 127.0.0.1, eth0, 192.168.1.100\n\n");
+    printf("  -p <port>         Port to listen on (default: %d)\n", SERVER_PORT);
+    printf("                    Range: 1-65535\n\n");
+#if TLS_ENABLED
+    printf("  -e <mode>         Encryption mode (default: none)\n");
+    printf("                    none  - Plain TCP (no encryption)\n");
+    printf("                    tls12 - TLS 1.2 encryption\n");
+    printf("                    tls13 - TLS 1.3 encryption (recommended)\n\n");
+    printf("  -cert <path>      Path to server certificate (default: %s)\n", TLS_DEFAULT_CERT_FILE);
+    printf("                    Required for TLS modes\n\n");
+    printf("  -key <path>       Path to server private key (default: %s)\n", TLS_DEFAULT_KEY_FILE);
+    printf("                    Required for TLS modes\n\n");
+#endif
+    printf("Client Mode Options:\n");
+    printf("  -c <ip>:<port>    Connect to server as client\n");
+    printf("                    Example: -c 192.168.1.100:12345\n\n");
+    printf("General Options:\n");
+    printf("  -h                Show this help message\n\n");
+    printf("Examples:\n");
+#if TLS_ENABLED
+    printf("  %s -e none                          # Plain TCP server\n", prog_name);
+    printf("  %s -e tls13 -p 8443                 # TLS 1.3 server on port 8443\n", prog_name);
+#else
+    printf("  %s -p 12345                         # TCP server on port 12345\n", prog_name);
+#endif
+    printf("  %s -c 127.0.0.1:12345               # Connect as client\n", prog_name);
 }
 
 int main(int argc, char *argv[]) {
@@ -118,6 +211,17 @@ int main(int argc, char *argv[]) {
     int connect_server_port = 0;
     int opt = 0;
     char *colon = NULL;
+#if TLS_ENABLED
+    int encryption_mode = ENCRYPT_NONE; /* Default to no encryption */
+    char cert_path[TLS_CERT_PATH_MAX];
+    char key_path[TLS_CERT_PATH_MAX];
+
+    /* Initialize with default paths */
+    strncpy(cert_path, TLS_DEFAULT_CERT_FILE, TLS_CERT_PATH_MAX - 1);
+    cert_path[TLS_CERT_PATH_MAX - 1] = '\0';
+    strncpy(key_path, TLS_DEFAULT_KEY_FILE, TLS_CERT_PATH_MAX - 1);
+    key_path[TLS_CERT_PATH_MAX - 1] = '\0';
+#endif
 
 #ifdef _WIN32
     WSADATA wsa_data;
@@ -127,7 +231,7 @@ int main(int argc, char *argv[]) {
     }
 #endif
 
-    while ((opt = getopt(argc, argv, "i:p:c:")) != -1) {
+    while ((opt = getopt(argc, argv, "i:p:c:e:h")) != -1) {
         switch (opt) {
             case 'i':
                 listen_address = optarg;
@@ -156,11 +260,62 @@ int main(int argc, char *argv[]) {
                     exit(EXIT_FAILURE);
                 }
                 break;
+            case 'e':
+#if TLS_ENABLED
+                if (strcmp(optarg, "none") == 0) {
+                    encryption_mode = ENCRYPT_NONE;
+                } else if (strcmp(optarg, "tls12") == 0) {
+                    encryption_mode = ENCRYPT_TLS12;
+                } else if (strcmp(optarg, "tls13") == 0) {
+                    encryption_mode = ENCRYPT_TLS13;
+                } else {
+                    fprintf(stderr, "Invalid encryption mode: %s\n", optarg);
+                    fprintf(stderr, "Valid modes: none, tls12, tls13\n");
+                    print_usage(argv[0]);
+                    exit(EXIT_FAILURE);
+                }
+#else
+                fprintf(stderr, "TLS support not compiled in. Rebuild with TLS_ENABLED=1\n");
+                exit(EXIT_FAILURE);
+#endif
+                break;
+            case 'h':
+                print_usage(argv[0]);
+                exit(EXIT_SUCCESS);
             default:
                 print_usage(argv[0]);
                 exit(EXIT_FAILURE);
         }
     }
+
+#if TLS_ENABLED
+    /* Parse remaining arguments for long options (-cert and -key) */
+    while (optind < argc) {
+        if (strcmp(argv[optind], "-cert") == 0 || strcmp(argv[optind], "--cert") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option %s requires an argument\n", argv[optind]);
+                print_usage(argv[0]);
+                exit(EXIT_FAILURE);
+            }
+            strncpy(cert_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
+            cert_path[TLS_CERT_PATH_MAX - 1] = '\0';
+            optind += 2;
+        } else if (strcmp(argv[optind], "-key") == 0 || strcmp(argv[optind], "--key") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option %s requires an argument\n", argv[optind]);
+                print_usage(argv[0]);
+                exit(EXIT_FAILURE);
+            }
+            strncpy(key_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
+            key_path[TLS_CERT_PATH_MAX - 1] = '\0';
+            optind += 2;
+        } else {
+            fprintf(stderr, "Unknown option: %s\n", argv[optind]);
+            print_usage(argv[0]);
+            exit(EXIT_FAILURE);
+        }
+    }
+#endif
 
     if (connect_server_ip != NULL) {
         /* Act as a client */
@@ -233,6 +388,28 @@ int main(int argc, char *argv[]) {
         client_info_t *client_info = NULL;
         pthread_t thread_id;
 
+#if TLS_ENABLED
+        /* Initialize TLS context before accepting connections (if encryption enabled) */
+        if (encryption_mode != ENCRYPT_NONE) {
+            g_tls_ctx = tls_context_init(cert_path, key_path, encryption_mode);
+            if (g_tls_ctx == NULL) {
+                fprintf(stderr, "Failed to initialize TLS: %s\n", tls_get_error_string());
+                fprintf(stderr, "Make sure certificates exist at:\n");
+                fprintf(stderr, "  %s\n", cert_path);
+                fprintf(stderr, "  %s\n", key_path);
+                fprintf(stderr, "Run './scripts/generate_test_certs.sh' to generate test certificates.\n");
+                exit(EXIT_FAILURE);
+            }
+            if (encryption_mode == ENCRYPT_TLS12) {
+                printf("TLS 1.2 enabled\n");
+            } else {
+                printf("TLS 1.3 enabled\n");
+            }
+        } else {
+            printf("Running in plain TCP mode (no encryption)\n");
+        }
+#endif
+
         /* Create socket file descriptor */
         if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
             perror("socket failed");
@@ -301,6 +478,11 @@ int main(int argc, char *argv[]) {
             }
             pthread_detach(thread_id); /* Detach thread to clean up resources automatically */
         }
+
+#if TLS_ENABLED
+        /* Cleanup TLS context on shutdown */
+        tls_context_cleanup(g_tls_ctx);
+#endif
 
 #ifdef _WIN32
         closesocket(server_fd);
