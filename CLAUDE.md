@@ -85,3 +85,22 @@ The server (`src/core/server/net/c/xoe.c`) currently implements:
 - Simple client mode for testing
 
 Platform-specific network code is handled via `#ifdef _WIN32` blocks (Winsock2 vs BSD sockets).
+
+## Coding Standards and Preferences
+
+### Clean Code Principles
+This project follows Clean Code principles with emphasis on:
+
+- **Reusable Helper Functions**: Prefer creating helper functions that can be reused multiple times rather than duplicating code
+- **Complete Documentation**: All code must be thoroughly documented with clear comments explaining purpose, parameters, return values, and any side effects
+- **Full Test Coverage**: All code should have complete test coverage to ensure reliability and maintainability
+
+### Documentation Requirements
+- Function headers should document purpose, parameters, return values, and error conditions
+- Complex algorithms or business logic should include inline comments
+- Non-obvious code sections should be explained
+
+### Testing Requirements
+- All functions should have corresponding unit tests
+- Edge cases and error conditions must be tested
+- Test coverage should be comprehensive and maintainable
