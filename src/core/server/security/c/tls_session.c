@@ -103,7 +103,8 @@ int tls_session_shutdown(SSL* ssl) {
     int ssl_error;
 
     if (ssl == NULL) {
-        return 0;  /* No-op if NULL */
+        fprintf(stderr, "tls_session_shutdown: SSL session is NULL\n");
+        return E_INVALID_ARGUMENT;
     }
 
     /* Send close_notify and wait for peer's close_notify */

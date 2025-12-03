@@ -440,7 +440,10 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            if ((new_socket = accept(server_fd, (struct sockaddr *)&client_info->client_addr, (socklen_t *)&addrlen)) < 0) {
+            new_socket = accept(server_fd,
+                                (struct sockaddr *)&client_info->client_addr,
+                                (socklen_t *)&addrlen);
+            if (new_socket < 0) {
                 perror("accept");
                 release_client_slot(client_info);
                 continue;
