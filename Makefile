@@ -11,6 +11,7 @@ OBJDIR   = obj
 COMMONDIR= $(SRCDIR)/common
 COREDIR  = $(SRCDIR)/core
 NETDIR   = $(COREDIR)/server/net
+FSMDIR   = $(NETDIR)/fsm
 SECDIR   = $(COREDIR)/server/security
 TESTDIR  = $(COREDIR)/server/tests
 PACKETDIR= $(COREDIR)/packet_manager
@@ -19,15 +20,17 @@ PACKETDIR= $(COREDIR)/packet_manager
 # Source files
 # Automatically find all .c files
 SOURCES = $(wildcard $(NETDIR)/c/*.c)
+SOURCES += $(wildcard $(FSMDIR)/c/*.c)
 SOURCES += $(wildcard $(SECDIR)/c/*.c)
 
 # Object files
 # Create a corresponding .o file in the OBJDIR for each .c file
 OBJECTS = $(patsubst $(NETDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(NETDIR)/c/*.c))
+OBJECTS += $(patsubst $(FSMDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(FSMDIR)/c/*.c))
 OBJECTS += $(patsubst $(SECDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(SECDIR)/c/*.c))
 
 # Include paths for headers
-INCLUDES = -I$(NETDIR)/h -I$(SECDIR)/h -I$(PACKETDIR)/h -I$(COMMONDIR)/h
+INCLUDES = -I$(NETDIR)/h -I$(FSMDIR)/h -I$(SECDIR)/h -I$(PACKETDIR)/h -I$(COMMONDIR)/h
 
 # Target executable
 TARGET_NAME = xoe
@@ -69,6 +72,11 @@ $(TARGET): $(OBJECTS)
 
 # Pattern rule to compile .c source files into .o object files
 $(OBJDIR)/%.o: $(NETDIR)/c/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Pattern rule to compile FSM source files
+$(OBJDIR)/%.o: $(FSMDIR)/c/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
