@@ -9,7 +9,7 @@ XOE (X over Ethernet) is an extensible framework for encapsulation of various ne
 - Serial connector for bridging TTY devices over Ethernet
 - TLS/SSL support for secure connections
 
-This project is also a testbed for human-LLM hybrid development. All contributions should be clearly labeled by category (classic coder, LLM-assisted coder, or vibe coder).
+This project is also a testbed for human-LLM hybrid development. All contributions must be clearly labeled by category (see Git Workflow section for commit label types).
 
 ## Build Commands
 
@@ -69,9 +69,17 @@ telnet localhost 12345
 - `refactor/<description>` - Code refactoring
 - `test/<description>` - Test additions or improvements
 
+**Commit Label Types**:
+- `[CLASSIC]` - Traditional hand-coded implementation without AI assistance
+- `[CLASSIC-REVIEW]` - Traditional human-run code review
+- `[LLM-ASSISTED]` - Code written with LLM assistance (pair programming style)
+- `[LLM-ARCH]` - Software architect leveraging LLM for code generation while reviewing, adjusting, and confirming all plans
+- `[LLM-REVIEW]` - LLM-powered code review and resulting fixes
+- `[VIBE]` - Experimental or exploratory coding
+
 **Development Process**:
 1. Create a new branch from `main`: `git checkout -b feature/your-feature-name`
-2. Make your changes and commit with appropriate labels ([CLASSIC], [LLM-ASSISTED], or [VIBE])
+2. Make your changes and commit with appropriate labels (see Commit Label Types above)
 3. Push the branch: `git push -u origin feature/your-feature-name`
 4. Create a pull request to merge into `main`
 5. Ensure PR checklist is complete before merging
@@ -85,7 +93,7 @@ telnet localhost 12345
 - [ ] All functions have complete documentation (purpose, parameters, return values, errors)
 - [ ] Code has complete test coverage
 - [ ] Helper functions are reusable and well-documented
-- [ ] Commits include contribution label ([CLASSIC], [LLM-ASSISTED], or [VIBE])
+- [ ] Commits include contribution label (see Commit Label Types)
 - [ ] Changes align with Clean Code principles (see Coding Standards section)
 
 ## Architecture
