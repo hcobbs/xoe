@@ -16,8 +16,7 @@
 #ifndef TLS_CONTEXT_H
 #define TLS_CONTEXT_H
 
-/* Forward declare OpenSSL types to avoid exposing OpenSSL headers */
-typedef struct ssl_ctx_st SSL_CTX;
+#include "tls_types.h"
 
 /**
  * @brief Initialize the global TLS context

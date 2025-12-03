@@ -13,8 +13,7 @@
 #ifndef TLS_IO_H
 #define TLS_IO_H
 
-/* Forward declare OpenSSL types */
-typedef struct ssl_st SSL;
+#include "tls_types.h"
 
 /**
  * @brief Read data from TLS connection
