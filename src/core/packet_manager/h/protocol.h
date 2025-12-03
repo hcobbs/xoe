@@ -1,9 +1,7 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
-/* C89-compatible fixed-width integer types */
-typedef unsigned short uint16_t;
-typedef unsigned int uint32_t;
+#include "types.h"
 
 /* Protocol ID constants */
 #define XOE_PROTOCOL_RAW    0x0000  /* Raw/echo protocol (future) */
@@ -16,10 +14,16 @@ typedef unsigned int uint32_t;
  *
  * This holds a pointer to the actual data buffer and its length,
  * allowing for flexible and safe data handling.
+ *
+ * The owns_data flag indicates whether this payload structure owns
+ * the data buffer and is responsible for freeing it. This prevents
+ * double-free errors when the data buffer is a stack variable or
+ * managed externally.
  */
 typedef struct {
-    uint32_t len;
-    void* data;
+    uint32_t len;       /* Length of data in bytes */
+    void* data;         /* Pointer to data buffer */
+    int owns_data;      /* TRUE if data was malloc'd and should be freed */
 } xoe_payload_t;
 
 /**

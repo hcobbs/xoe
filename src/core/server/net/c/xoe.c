@@ -47,11 +47,11 @@ static pthread_mutex_t pool_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Global TLS context (read-only after initialization, thread-safe) */
 #if TLS_ENABLED
-static SSL_CTX* g_tls_ctx = NULL;
+SSL_CTX* g_tls_ctx = NULL;
 #endif
 
 /* Acquire a client slot from the pool */
-static client_info_t* acquire_client_slot(void) {
+client_info_t* acquire_client_slot(void) {
     int i;
     client_info_t *slot = NULL;
 
@@ -69,7 +69,7 @@ static client_info_t* acquire_client_slot(void) {
 }
 
 /* Release a client slot back to the pool */
-static void release_client_slot(client_info_t *slot) {
+void release_client_slot(client_info_t *slot) {
     if (slot != NULL) {
         pthread_mutex_lock(&pool_mutex);
         slot->in_use = 0;
@@ -79,7 +79,7 @@ static void release_client_slot(client_info_t *slot) {
 }
 
 /* Initialize the client pool */
-static void init_client_pool(void) {
+void init_client_pool(void) {
     int i;
     for (i = 0; i < MAX_CLIENTS; i++) {
         client_pool[i].in_use = 0;
@@ -92,13 +92,16 @@ void *handle_client(void *arg) {
     int client_socket = client_info->client_socket;
     struct sockaddr_in client_addr = client_info->client_addr;
     char buffer[BUFFER_SIZE];
+    char client_ip[INET_ADDRSTRLEN];
     int bytes_received;
 
 #if TLS_ENABLED
     SSL* tls = NULL;
 #endif
 
-    printf("Connection accepted from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+    /* Convert client IP to string (thread-safe) */
+    inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+    printf("Connection accepted from %s:%d\n", client_ip, ntohs(client_addr.sin_port));
 
 #if TLS_ENABLED
     /* Perform TLS handshake (if encryption enabled) */
@@ -106,13 +109,13 @@ void *handle_client(void *arg) {
         tls = tls_session_create(g_tls_ctx, client_socket);
         if (tls == NULL) {
             fprintf(stderr, "TLS handshake failed with %s:%d: %s\n",
-                    inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port),
+                    client_ip, ntohs(client_addr.sin_port),
                     tls_get_error_string());
             goto cleanup;
         }
         client_info->tls_session = tls;
         printf("TLS handshake successful with %s:%d\n",
-               inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+               client_ip, ntohs(client_addr.sin_port));
     }
 #endif
 
@@ -132,7 +135,7 @@ void *handle_client(void *arg) {
         }
 
         buffer[bytes_received] = '\0';
-        printf("Received from %s:%d: %s", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), buffer);
+        printf("Received from %s:%d: %s", client_ip, ntohs(client_addr.sin_port), buffer);
 
 #if TLS_ENABLED
         if (tls != NULL) {
@@ -149,7 +152,7 @@ void *handle_client(void *arg) {
     }
 
     if (bytes_received == 0) {
-        printf("Client %s:%d disconnected\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        printf("Client %s:%d disconnected\n", client_ip, ntohs(client_addr.sin_port));
     } else if (bytes_received == -1) {
 #if TLS_ENABLED
         if (tls != NULL) {
@@ -222,411 +225,67 @@ void print_usage(const char *prog_name) {
     printf("                                      # Serial bridge at 115200 baud\n");
 }
 
+/**
+ * main - XOE application entry point with FSM
+ * @argc: Argument count
+ * @argv: Argument vector
+ *
+ * Returns: Exit code from configuration (EXIT_SUCCESS or EXIT_FAILURE)
+ *
+ * Implements a finite state machine to manage application flow:
+ * - INIT: Initialize configuration with defaults
+ * - PARSE_ARGS: Parse command-line arguments
+ * - VALIDATE_CONFIG: Validate configuration settings
+ * - MODE_SELECT: Determine operating mode
+ * - SERVER_MODE/CLIENT_STD/CLIENT_SERIAL: Execute mode-specific logic
+ * - CLEANUP: Release resources
+ * - EXIT: Terminal state
+ */
 int main(int argc, char *argv[]) {
-    int listen_port = SERVER_PORT;
-    char *listen_address = NULL; /* Default to INADDR_ANY (0.0.0.0) */
-    char *connect_server_ip = NULL;
-    int connect_server_port = 0;
-    int opt = 0;
-    char *colon = NULL;
-    serial_config_t serial_config;
-    char *serial_device = NULL;
-    int use_serial = FALSE;
-#if TLS_ENABLED
-    int encryption_mode = ENCRYPT_NONE; /* Default to no encryption */
-    char cert_path[TLS_CERT_PATH_MAX];
-    char key_path[TLS_CERT_PATH_MAX];
-#endif
+    xoe_config_t config;
+    xoe_state_t state = STATE_INIT;
 
-    /* Initialize serial config with defaults */
-    serial_config_init_defaults(&serial_config);
+    while (state != STATE_EXIT) {
+        switch (state) {
+            case STATE_INIT:
+                state = state_init(&config);
+                break;
 
-#if TLS_ENABLED
-    /* Initialize with default paths */
-    strncpy(cert_path, TLS_DEFAULT_CERT_FILE, TLS_CERT_PATH_MAX - 1);
-    cert_path[TLS_CERT_PATH_MAX - 1] = '\0';
-    strncpy(key_path, TLS_DEFAULT_KEY_FILE, TLS_CERT_PATH_MAX - 1);
-    key_path[TLS_CERT_PATH_MAX - 1] = '\0';
-#endif
+            case STATE_PARSE_ARGS:
+                state = state_parse_args(&config, argc, argv);
+                break;
 
-    while ((opt = getopt(argc, argv, "i:p:c:e:s:b:h")) != -1) {
-        switch (opt) {
-            case 'i':
-                listen_address = optarg;
+            case STATE_VALIDATE_CONFIG:
+                state = state_validate_config(&config);
                 break;
-            case 'p':
-                listen_port = atoi(optarg);
-                if (listen_port <= 0 || listen_port > 65535) {
-                    fprintf(stderr, "Invalid port number: %s\n", optarg);
-                    print_usage(argv[0]);
-                    exit(EXIT_FAILURE);
-                }
+
+            case STATE_MODE_SELECT:
+                state = state_mode_select(&config);
                 break;
-            case 'c':
-                colon = strchr(optarg, ':');
-                if (colon == NULL) {
-                    fprintf(stderr, "Invalid server address format. Expected <ip>:<port>.\n");
-                    print_usage(argv[0]);
-                    exit(EXIT_FAILURE);
-                }
-                *colon = '\0';
-                connect_server_ip = optarg;
-                connect_server_port = atoi(colon + 1);
-                if (connect_server_port <= 0 || connect_server_port > 65535) {
-                    fprintf(stderr, "Invalid server port number: %s\n", colon + 1);
-                    print_usage(argv[0]);
-                    exit(EXIT_FAILURE);
-                }
+
+            case STATE_SERVER_MODE:
+                state = state_server_mode(&config);
                 break;
-            case 'e':
-#if TLS_ENABLED
-                if (strcmp(optarg, "none") == 0) {
-                    encryption_mode = ENCRYPT_NONE;
-                } else if (strcmp(optarg, "tls12") == 0) {
-                    encryption_mode = ENCRYPT_TLS12;
-                } else if (strcmp(optarg, "tls13") == 0) {
-                    encryption_mode = ENCRYPT_TLS13;
-                } else {
-                    fprintf(stderr, "Invalid encryption mode: %s\n", optarg);
-                    fprintf(stderr, "Valid modes: none, tls12, tls13\n");
-                    print_usage(argv[0]);
-                    exit(EXIT_FAILURE);
-                }
-#else
-                fprintf(stderr, "TLS support not compiled in. Rebuild with TLS_ENABLED=1\n");
-                exit(EXIT_FAILURE);
-#endif
+
+            case STATE_CLIENT_STD:
+                state = state_client_std(&config);
                 break;
-            case 's':
-                serial_device = optarg;
-                use_serial = TRUE;
+
+            case STATE_CLIENT_SERIAL:
+                state = state_client_serial(&config);
                 break;
-            case 'b':
-                serial_config.baud_rate = atoi(optarg);
-                if (serial_config.baud_rate <= 0) {
-                    fprintf(stderr, "Invalid baud rate: %s\n", optarg);
-                    print_usage(argv[0]);
-                    exit(EXIT_FAILURE);
-                }
+
+            case STATE_CLEANUP:
+                state = state_cleanup(&config);
                 break;
-            case 'h':
-                print_usage(argv[0]);
-                exit(EXIT_SUCCESS);
+
             default:
-                print_usage(argv[0]);
-                exit(EXIT_FAILURE);
+                /* Unknown state - exit with failure */
+                config.exit_code = EXIT_FAILURE;
+                state = STATE_EXIT;
+                break;
         }
     }
 
-    /* Parse remaining arguments for long options */
-    while (optind < argc) {
-#if TLS_ENABLED
-        if (strcmp(argv[optind], "-cert") == 0 || strcmp(argv[optind], "--cert") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option %s requires an argument\n", argv[optind]);
-                print_usage(argv[0]);
-                exit(EXIT_FAILURE);
-            }
-            strncpy(cert_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
-            cert_path[TLS_CERT_PATH_MAX - 1] = '\0';
-            optind += 2;
-        } else if (strcmp(argv[optind], "-key") == 0 || strcmp(argv[optind], "--key") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option %s requires an argument\n", argv[optind]);
-                print_usage(argv[0]);
-                exit(EXIT_FAILURE);
-            }
-            strncpy(key_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
-            key_path[TLS_CERT_PATH_MAX - 1] = '\0';
-            optind += 2;
-        } else
-#endif
-        if (strcmp(argv[optind], "--parity") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --parity requires an argument\n");
-                print_usage(argv[0]);
-                exit(EXIT_FAILURE);
-            }
-            if (strcmp(argv[optind + 1], "none") == 0) {
-                serial_config.parity = SERIAL_PARITY_NONE;
-            } else if (strcmp(argv[optind + 1], "even") == 0) {
-                serial_config.parity = SERIAL_PARITY_EVEN;
-            } else if (strcmp(argv[optind + 1], "odd") == 0) {
-                serial_config.parity = SERIAL_PARITY_ODD;
-            } else {
-                fprintf(stderr, "Invalid parity: %s (use none, even, or odd)\n", argv[optind + 1]);
-                exit(EXIT_FAILURE);
-            }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--databits") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --databits requires an argument\n");
-                print_usage(argv[0]);
-                exit(EXIT_FAILURE);
-            }
-            serial_config.data_bits = atoi(argv[optind + 1]);
-            if (serial_config.data_bits != 7 && serial_config.data_bits != 8) {
-                fprintf(stderr, "Invalid data bits: %s (use 7 or 8)\n", argv[optind + 1]);
-                exit(EXIT_FAILURE);
-            }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--stopbits") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --stopbits requires an argument\n");
-                print_usage(argv[0]);
-                exit(EXIT_FAILURE);
-            }
-            serial_config.stop_bits = atoi(argv[optind + 1]);
-            if (serial_config.stop_bits != 1 && serial_config.stop_bits != 2) {
-                fprintf(stderr, "Invalid stop bits: %s (use 1 or 2)\n", argv[optind + 1]);
-                exit(EXIT_FAILURE);
-            }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--flow") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --flow requires an argument\n");
-                print_usage(argv[0]);
-                exit(EXIT_FAILURE);
-            }
-            if (strcmp(argv[optind + 1], "none") == 0) {
-                serial_config.flow_control = SERIAL_FLOW_NONE;
-            } else if (strcmp(argv[optind + 1], "xonxoff") == 0) {
-                serial_config.flow_control = SERIAL_FLOW_XONXOFF;
-            } else if (strcmp(argv[optind + 1], "rtscts") == 0) {
-                serial_config.flow_control = SERIAL_FLOW_RTSCTS;
-            } else {
-                fprintf(stderr, "Invalid flow control: %s (use none, xonxoff, or rtscts)\n",
-                        argv[optind + 1]);
-                exit(EXIT_FAILURE);
-            }
-            optind += 2;
-        } else {
-            fprintf(stderr, "Unknown option: %s\n", argv[optind]);
-            print_usage(argv[0]);
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    /* Validate serial mode configuration */
-    if (use_serial) {
-        if (connect_server_ip == NULL) {
-            fprintf(stderr, "Serial mode (-s) requires client mode (-c)\n");
-            print_usage(argv[0]);
-            exit(EXIT_FAILURE);
-        }
-        if (serial_device == NULL) {
-            fprintf(stderr, "Serial device not specified\n");
-            print_usage(argv[0]);
-            exit(EXIT_FAILURE);
-        }
-        /* Set device path in config */
-        strncpy(serial_config.device_path, serial_device, SERIAL_DEVICE_PATH_MAX - 1);
-        serial_config.device_path[SERIAL_DEVICE_PATH_MAX - 1] = '\0';
-    }
-
-    if (connect_server_ip != NULL) {
-        /* Act as a client */
-        int sock = 0;
-        struct sockaddr_in serv_addr;
-        char buffer[BUFFER_SIZE] = {0};
-        int bytes_received = 0;
-
-        if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-            perror("Socket creation error");
-            exit(EXIT_FAILURE);
-        }
-
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(connect_server_port);
-
-        if (inet_pton(AF_INET, connect_server_ip, &serv_addr.sin_addr) <= 0) {
-            fprintf(stderr, "Invalid address/ Address not supported\n");
-            exit(EXIT_FAILURE);
-        }
-
-        if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-            perror("Connection Failed");
-            exit(EXIT_FAILURE);
-        }
-
-        printf("Connected to server %s:%d\n", connect_server_ip, connect_server_port);
-
-        if (use_serial) {
-            /* Serial client mode - bridge serial port to network */
-            serial_client_t* serial_client;
-            int result;
-
-            printf("Serial mode enabled: %s at %d baud\n",
-                   serial_config.device_path, serial_config.baud_rate);
-
-            /* Initialize serial client */
-            serial_client = serial_client_init(&serial_config, sock);
-            if (serial_client == NULL) {
-                fprintf(stderr, "Failed to initialize serial client\n");
-                close(sock);
-                exit(EXIT_FAILURE);
-            }
-
-            printf("Serial port opened successfully\n");
-
-            /* Start I/O threads */
-            result = serial_client_start(serial_client);
-            if (result != 0) {
-                fprintf(stderr, "Failed to start serial client threads: %d\n", result);
-                serial_client_cleanup(&serial_client);
-                close(sock);
-                exit(EXIT_FAILURE);
-            }
-
-            printf("Serial bridge active (Ctrl+C to exit)\n");
-
-            /* Main thread waits for shutdown signal (Ctrl+C handled by signal handler) */
-            while (!serial_client_should_shutdown(serial_client)) {
-                sleep(1);
-            }
-
-            /* Stop threads and cleanup */
-            printf("\nShutting down serial bridge...\n");
-            serial_client_stop(serial_client);
-            serial_client_cleanup(&serial_client);
-            printf("Serial port closed\n");
-        } else {
-            /* Standard client mode - stdin/stdout */
-            printf("Enter messages to send (type 'exit' to quit):\n");
-
-            while (TRUE) {
-                printf("> ");
-                if (fgets(buffer, BUFFER_SIZE, stdin) == NULL) {
-                    break; /* EOF or error */
-                }
-
-                /* Remove newline character if present */
-                buffer[strcspn(buffer, "\n")] = 0;
-
-                if (strcmp(buffer, "exit") == 0) {
-                    break;
-                }
-
-                send(sock, buffer, strlen(buffer), 0);
-                bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
-                if (bytes_received > 0) {
-                    buffer[bytes_received] = '\0';
-                    printf("Server response: %s\n", buffer);
-                } else if (bytes_received == 0) {
-                    printf("Server disconnected.\n");
-                    break;
-                } else {
-                    perror("recv failed");
-                    break;
-                }
-            }
-        }
-
-        close(sock);
-        printf("Client disconnected.\n");
-
-    } else {
-        /* Act as a server */
-        int server_fd = 0;
-        int new_socket = 0;
-        struct sockaddr_in address;
-        int addrlen = sizeof(address);
-        client_info_t *client_info = NULL;
-        pthread_t thread_id;
-
-#if TLS_ENABLED
-        /* Initialize TLS context before accepting connections (if encryption enabled) */
-        if (encryption_mode != ENCRYPT_NONE) {
-            g_tls_ctx = tls_context_init(cert_path, key_path, encryption_mode);
-            if (g_tls_ctx == NULL) {
-                fprintf(stderr, "Failed to initialize TLS: %s\n", tls_get_error_string());
-                fprintf(stderr, "Make sure certificates exist at:\n");
-                fprintf(stderr, "  %s\n", cert_path);
-                fprintf(stderr, "  %s\n", key_path);
-                fprintf(stderr, "Run './scripts/generate_test_certs.sh' to generate test certificates.\n");
-                exit(EXIT_FAILURE);
-            }
-            if (encryption_mode == ENCRYPT_TLS12) {
-                printf("TLS 1.2 enabled\n");
-            } else {
-                printf("TLS 1.3 enabled\n");
-            }
-        } else {
-            printf("Running in plain TCP mode (no encryption)\n");
-        }
-#endif
-
-        /* Create socket file descriptor */
-        if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-            perror("socket failed");
-            exit(EXIT_FAILURE);
-        }
-
-        /* Set up address structure */
-        address.sin_family = AF_INET;
-        address.sin_addr.s_addr = INADDR_ANY; /* Default to all interfaces */
-        if (listen_address != NULL) {
-            if (inet_pton(AF_INET, listen_address, &address.sin_addr) <= 0) {
-                fprintf(stderr, "Invalid listen address: %s\n", listen_address);
-                exit(EXIT_FAILURE);
-            }
-        }
-        address.sin_port = htons(listen_port);
-
-        /* Bind the socket to the specified IP and port */
-        if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-            perror("bind failed");
-            exit(EXIT_FAILURE);
-        }
-
-        /* Listen for incoming connections */
-        if (listen(server_fd, 10) < 0) {
-            perror("listen");
-            exit(EXIT_FAILURE);
-        }
-
-        /* Initialize the client pool */
-        init_client_pool();
-
-        printf("Server listening on %s:%d\n", (listen_address == NULL) ? "0.0.0.0" : listen_address, listen_port);
-
-        while (TRUE) {
-            client_info = acquire_client_slot();
-            if (client_info == NULL) {
-                fprintf(stderr, "Max clients (%d) reached, rejecting connection\n", MAX_CLIENTS);
-                /* Still need to accept and close to prevent backlog */
-                new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
-                if (new_socket >= 0) {
-                    close(new_socket);
-                }
-                continue;
-            }
-
-            new_socket = accept(server_fd,
-                                (struct sockaddr *)&client_info->client_addr,
-                                (socklen_t *)&addrlen);
-            if (new_socket < 0) {
-                perror("accept");
-                release_client_slot(client_info);
-                continue;
-            }
-            client_info->client_socket = new_socket;
-
-            if (pthread_create(&thread_id, NULL, handle_client, (void *)client_info) != 0) {
-                perror("pthread_create failed");
-                close(new_socket);
-                release_client_slot(client_info);
-            }
-            pthread_detach(thread_id); /* Detach thread to clean up resources automatically */
-        }
-
-#if TLS_ENABLED
-        /* Cleanup TLS context on shutdown */
-        tls_context_cleanup(g_tls_ctx);
-#endif
-
-        close(server_fd);
-    }
-
-    return 0;
+    return config.exit_code;
 }
