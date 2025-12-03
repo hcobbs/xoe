@@ -8,32 +8,22 @@ CFLAGS = -Wall -Wextra -g -std=c89 -pedantic
 SRCDIR   = src
 BINDIR   = bin
 OBJDIR   = obj
-COMMONDIR= $(SRCDIR)/common
+LIBDIR   = $(SRCDIR)/lib
 COREDIR  = $(SRCDIR)/core
-NETDIR   = $(COREDIR)/server/net
-FSMDIR   = $(NETDIR)/fsm
-SECDIR   = $(COREDIR)/server/security
-TESTDIR  = $(COREDIR)/server/tests
-PACKETDIR= $(COREDIR)/packet_manager
-SERIALDIR= $(SRCDIR)/connector/serial
+CONNECTORDIR = $(SRCDIR)/connectors
+TESTDIR  = $(SRCDIR)/tests
 
+# Source files (auto-discover all .c files in new structure)
+SOURCES = $(wildcard $(COREDIR)/*.c)
+SOURCES += $(wildcard $(COREDIR)/fsm/*.c)
+SOURCES += $(wildcard $(LIBDIR)/*/*.c)
+SOURCES += $(wildcard $(CONNECTORDIR)/*/*.c)
 
-# Source files
-# Automatically find all .c files
-SOURCES = $(wildcard $(NETDIR)/c/*.c)
-SOURCES += $(wildcard $(FSMDIR)/c/*.c)
-SOURCES += $(wildcard $(SECDIR)/c/*.c)
-SOURCES += $(wildcard $(SERIALDIR)/c/*.c)
+# Object files (flatten all to obj/)
+OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))
 
-# Object files
-# Create a corresponding .o file in the OBJDIR for each .c file
-OBJECTS = $(patsubst $(NETDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(NETDIR)/c/*.c))
-OBJECTS += $(patsubst $(FSMDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(FSMDIR)/c/*.c))
-OBJECTS += $(patsubst $(SECDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(SECDIR)/c/*.c))
-OBJECTS += $(patsubst $(SERIALDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(SERIALDIR)/c/*.c))
-
-# Include paths for headers
-INCLUDES = -I$(NETDIR)/h -I$(FSMDIR)/h -I$(SECDIR)/h -I$(PACKETDIR)/h -I$(COMMONDIR)/h -I$(SERIALDIR)/h
+# Include paths (simplified to single -Isrc)
+INCLUDES = -I$(SRCDIR)
 
 # Target executable
 TARGET_NAME = xoe
@@ -43,7 +33,6 @@ TARGET = $(BINDIR)/$(TARGET_NAME)
 LIBS =
 
 # OS detection and specific settings
-# POSIX systems only (Linux, macOS, BSD)
 UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Linux)
@@ -63,7 +52,7 @@ ifeq ($(UNAME_S),Darwin) # macOS
     endif
 endif
 
-# Default target executed when you just run `make`
+# Default target
 .PHONY: all
 all: $(TARGET)
 
@@ -73,36 +62,22 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $^ -o $@ $(LIBS)
 	@echo "Successfully built: $@"
 
-# Pattern rule to compile .c source files into .o object files
-$(OBJDIR)/%.o: $(NETDIR)/c/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
-
-# Pattern rule to compile FSM state handler source files
-$(OBJDIR)/%.o: $(FSMDIR)/c/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
-
-# Pattern rule to compile security source files
-$(OBJDIR)/%.o: $(SECDIR)/c/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
-
-# Pattern rule to compile serial connector source files
-$(OBJDIR)/%.o: $(SERIALDIR)/c/%.c
+# Pattern rule to compile all source files
+# Object files maintain directory structure under obj/
+$(OBJDIR)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
 # Test configuration
-TEST_SOURCES = $(wildcard $(TESTDIR)/*.c)
-TEST_FRAMEWORK = $(TESTDIR)/test_framework.c
-TEST_BINARIES = $(filter-out $(BINDIR)/test_framework,$(patsubst $(TESTDIR)/test_%.c,$(BINDIR)/test_%,$(TEST_SOURCES)))
+TEST_FRAMEWORK = $(TESTDIR)/framework/test_framework.c
+TEST_SOURCES = $(wildcard $(TESTDIR)/unit/test_*.c)
+TEST_BINARIES = $(patsubst $(TESTDIR)/unit/test_%.c,$(BINDIR)/test_%,$(TEST_SOURCES))
 
-# Separate object files for test framework
+# Separate object file for test framework
 TEST_FRAMEWORK_OBJ = $(OBJDIR)/test_framework.o
 
-# Security objects (without xoe.o which contains main())
-SEC_TEST_OBJECTS = $(filter-out $(OBJDIR)/xoe.o,$(OBJECTS))
+# Application objects (without main.o which contains main())
+APP_TEST_OBJECTS = $(filter-out $(OBJDIR)/core/main.o,$(OBJECTS))
 
 # Test target - run all unit tests
 .PHONY: test
@@ -119,10 +94,9 @@ test: $(TEST_BINARIES)
 	@./scripts/test_integration.sh
 
 # Pattern rule for test binaries
-# Each test links with test framework, security modules, but NOT xoe.o (which has main())
-$(BINDIR)/test_%: $(TESTDIR)/test_%.c $(TEST_FRAMEWORK_OBJ) $(SEC_TEST_OBJECTS)
+$(BINDIR)/test_%: $(TESTDIR)/unit/test_%.c $(TEST_FRAMEWORK_OBJ) $(APP_TEST_OBJECTS)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -I$(TESTDIR) $< $(TEST_FRAMEWORK_OBJ) $(SEC_TEST_OBJECTS) -o $@ $(LIBS)
+	$(CC) $(CFLAGS) $(INCLUDES) -I$(TESTDIR) $< $(TEST_FRAMEWORK_OBJ) $(APP_TEST_OBJECTS) -o $@ $(LIBS)
 	@echo "Built test: $@"
 
 # Compile test framework object
