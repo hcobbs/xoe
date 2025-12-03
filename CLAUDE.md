@@ -91,7 +91,7 @@ Platform-specific network code is handled via `#ifdef _WIN32` blocks (Winsock2 v
 ### Clean Code Principles
 This project follows Clean Code principles with emphasis on:
 
-- **Spaces not Tabs for Alignment**: tabs are banned from use for alignment purposes.  Anything other than spaces used for alignment fail the code review and will not be accepted.
+- **Spaces for Alignment**: tabs are banned from use for alignment purposes.  Anything other than spaces used for alignment fail the code review and will not be accepted.
 - **Maximum Code Widt**: 120 Characters maximum line length. Use appropriate escapes to aling variables of a function cleanly and clearly readable.
 - **Reusable Helper Functions**: Prefer creating helper functions that can be reused multiple times rather than duplicating code
 - **Complete Documentation**: All code must be thoroughly documented with clear comments explaining purpose, parameters, return values, and any side effects
