@@ -344,6 +344,7 @@ static void* net_to_serial_thread_func(void* arg)
 
         packet.payload->data = net_buffer;
         packet.payload->len = bytes_received;
+        packet.payload->owns_data = FALSE;  /* Data is stack-allocated */
 
         /* Decapsulate */
         result = serial_protocol_decapsulate(&packet, serial_buffer,

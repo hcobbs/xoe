@@ -67,6 +67,7 @@ int serial_protocol_encapsulate(const void* data, uint32_t len,
     /* Set payload fields */
     payload->data = payload_data;
     payload->len = total_payload_size;
+    payload->owns_data = TRUE;  /* We malloc'd this data */
 
     /* Set packet fields */
     packet->protocol_id = XOE_PROTOCOL_SERIAL;
@@ -186,6 +187,11 @@ int serial_protocol_validate_checksum(const xoe_packet_t* packet)
 
 /**
  * @brief Free resources allocated for serial packet
+ *
+ * This function respects the owns_data flag to prevent double-free errors.
+ * If owns_data is TRUE, the data buffer was malloc'd and will be freed.
+ * If owns_data is FALSE, the data buffer is managed externally (e.g., stack
+ * variable) and must not be freed.
  */
 void serial_protocol_free_payload(xoe_packet_t* packet)
 {
@@ -194,7 +200,8 @@ void serial_protocol_free_payload(xoe_packet_t* packet)
     }
 
     if (packet->payload != NULL) {
-        if (packet->payload->data != NULL) {
+        /* Only free data buffer if this payload owns it */
+        if (packet->payload->owns_data && packet->payload->data != NULL) {
             free(packet->payload->data);
             packet->payload->data = NULL;
         }
