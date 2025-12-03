@@ -98,39 +98,50 @@ telnet localhost 12345
 ### Directory Structure
 ```
 src/
-├── common/              Common definitions used across project
-│   └── h/commonDefinitions.h  - Boolean defines, error codes
-├── core/
-│   ├── packet_manager/  Protocol definitions
-│   │   └── h/protocol.h - xoe_packet_t, xoe_payload_t, protocol_handler_t
-│   └── server/
-│       ├── net/         Network server implementation
-│       │   ├── c/xoe.c  - Main server/client implementation
-│       │   └── h/xoe.h  - Server configuration (port, buffer size)
-│       ├── security/    TLS/SSL support
-│       └── tests/       Test infrastructure
-└── connector/
-    └── serial/          Serial protocol connector (IMPLEMENTED)
-        ├── c/
-        │   ├── serial_buffer.c   - Thread-safe circular buffer
-        │   ├── serial_client.c   - Multi-threaded serial bridge
-        │   ├── serial_port.c     - POSIX termios serial I/O
-        │   └── serial_protocol.c - XOE packet encapsulation
-        └── h/
-            ├── serial_buffer.h   - Buffer API
-            ├── serial_client.h   - Client API
-            ├── serial_config.h   - Configuration structures
-            ├── serial_port.h     - Serial I/O API
-            └── serial_protocol.h - Protocol definitions
+├── lib/                 Reusable library components
+│   ├── common/          Common definitions and types
+│   │   ├── types.h      - Fixed-width integer typedefs
+│   │   └── definitions.h - Boolean defines, error codes
+│   ├── protocol/        Protocol definitions
+│   │   └── protocol.h   - xoe_packet_t, xoe_payload_t, protocol_handler_t
+│   └── security/        TLS/SSL support (10 files)
+│       ├── tls_config.h, tls_context.{c,h}
+│       ├── tls_error.{c,h}, tls_io.{c,h}
+│       ├── tls_session.{c,h}, tls_types.h
+├── core/                Core XOE application
+│   ├── main.c           Entry point (FSM loop)
+│   ├── config.h         Configuration structures (xoe_config_t, xoe_state_t)
+│   ├── server.{c,h}     Server implementation + client pool
+│   └── fsm/             Finite state machine handlers (8 files)
+│       ├── state_init.c, state_parse_args.c
+│       ├── state_validate_config.c, state_mode_select.c
+│       ├── state_server_mode.c, state_client_std.c
+│       ├── state_client_serial.c, state_cleanup.c
+├── connectors/          Pluggable protocol connectors
+│   └── serial/          Serial TTY connector (9 files)
+│       ├── serial_buffer.{c,h}   - Thread-safe circular buffer
+│       ├── serial_client.{c,h}   - Multi-threaded serial bridge
+│       ├── serial_config.h       - Configuration structures
+│       ├── serial_port.{c,h}     - POSIX termios serial I/O
+│       └── serial_protocol.{c,h} - XOE packet encapsulation
+└── tests/               Test infrastructure
+    ├── framework/       Test framework (2 files)
+    └── unit/            Unit tests (4 TLS tests)
 ```
+
+**Key Improvements** (Dec 2025 reorganization):
+- Flat structure (max 3 levels deep) vs. previous 6-level nesting
+- Single include path (`-Isrc`) vs. previous 6 paths
+- Colocated headers and implementations (no c/h split)
+- Clear module boundaries: lib/, core/, connectors/, tests/
 
 ### Build System
 - Compiled objects go to `obj/`, binaries to `bin/`
 - Makefile auto-detects OS and links platform-specific libraries:
   - Linux/macOS: `-lpthread`
-  - Windows: `-lws2_32`
   - TLS: `-lssl -lcrypto` (OpenSSL)
-- Builds all source files from `src/core/server/net/c/`, `src/core/server/security/c/`, and `src/connector/serial/c/`
+- Simplified build: 112 lines (down from 138), single `-Isrc` include path
+- Auto-discovers all `.c` files via wildcards: `core/*.c`, `core/fsm/*.c`, `lib/*/*.c`, `connectors/*/*.c`
 
 ### Protocol Architecture (Planned)
 
@@ -144,13 +155,24 @@ The current server implementation (`xoe.c`) is a simple echo server that will ev
 
 ### Current Implementation
 
-The server (`src/core/server/net/c/xoe.c`) currently implements:
-- Multi-threaded TCP server using POSIX threads
+The application uses a finite state machine architecture:
+- **Entry point**: `src/core/main.c` - Simple FSM loop (~54 lines)
+- **Server logic**: `src/core/server.c` - Multi-threaded TCP/TLS server with client pool
+- **State handlers**: `src/core/fsm/state_*.c` - 8 modular state handlers
+  - `state_init` - Initialize defaults
+  - `state_parse_args` - Command-line parsing
+  - `state_validate_config` - Configuration validation
+  - `state_mode_select` - Mode routing (server/client/serial)
+  - `state_server_mode` - TCP/TLS server implementation
+  - `state_client_std` - Standard interactive client
+  - `state_client_serial` - Serial bridge client
+  - `state_cleanup` - Resource cleanup
+
+Server features:
+- Multi-threaded with fixed-size client pool (MAX_CLIENTS concurrent connections)
 - Per-client thread spawned via `handle_client()`
 - Echo functionality: receives data and sends it back
-- Simple client mode for testing
-
-Platform-specific network code is handled via `#ifdef _WIN32` blocks (Winsock2 vs BSD sockets).
+- Optional TLS encryption (TLS 1.2/1.3)
 
 ### Serial Connector
 
