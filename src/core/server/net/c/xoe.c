@@ -163,11 +163,7 @@ cleanup:
     }
 #endif
 
-#ifdef _WIN32
-    closesocket(client_socket);
-#else
     close(client_socket);
-#endif
     release_client_slot(client_info);
     pthread_exit(NULL);
 }
@@ -221,14 +217,6 @@ int main(int argc, char *argv[]) {
     cert_path[TLS_CERT_PATH_MAX - 1] = '\0';
     strncpy(key_path, TLS_DEFAULT_KEY_FILE, TLS_CERT_PATH_MAX - 1);
     key_path[TLS_CERT_PATH_MAX - 1] = '\0';
-#endif
-
-#ifdef _WIN32
-    WSADATA wsa_data;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0) {
-        fprintf(stderr, "WSAStartup failed.\n");
-        return 1;
-    }
 #endif
 
     while ((opt = getopt(argc, argv, "i:p:c:e:h")) != -1) {
@@ -372,11 +360,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-#ifdef _WIN32
-        closesocket(sock);
-#else
         close(sock);
-#endif
         printf("Client disconnected.\n");
 
     } else {
@@ -451,11 +435,7 @@ int main(int argc, char *argv[]) {
                 /* Still need to accept and close to prevent backlog */
                 new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
                 if (new_socket >= 0) {
-#ifdef _WIN32
-                    closesocket(new_socket);
-#else
                     close(new_socket);
-#endif
                 }
                 continue;
             }
@@ -469,11 +449,7 @@ int main(int argc, char *argv[]) {
 
             if (pthread_create(&thread_id, NULL, handle_client, (void *)client_info) != 0) {
                 perror("pthread_create failed");
-#ifdef _WIN32
-                closesocket(new_socket);
-#else
                 close(new_socket);
-#endif
                 release_client_slot(client_info);
             }
             pthread_detach(thread_id); /* Detach thread to clean up resources automatically */
@@ -484,11 +460,7 @@ int main(int argc, char *argv[]) {
         tls_context_cleanup(g_tls_ctx);
 #endif
 
-#ifdef _WIN32
-        closesocket(server_fd);
-#else
         close(server_fd);
-#endif
     }
 
     return 0;

@@ -12,6 +12,7 @@ COMMONDIR= $(SRCDIR)/common
 COREDIR  = $(SRCDIR)/core
 NETDIR   = $(COREDIR)/server/net
 SECDIR   = $(COREDIR)/server/security
+TESTDIR  = $(COREDIR)/server/tests
 PACKETDIR= $(COREDIR)/packet_manager
 
 
@@ -36,8 +37,7 @@ TARGET = $(BINDIR)/$(TARGET_NAME)
 LIBS =
 
 # OS detection and specific settings
-# This uses `uname` which is common on POSIX systems (Linux, macOS) and
-# developer environments on Windows like Git Bash or MSYS2.
+# POSIX systems only (Linux, macOS, BSD)
 UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Linux)
@@ -55,15 +55,6 @@ ifeq ($(UNAME_S),Darwin) # macOS
         # Fall back to system LibreSSL
         LIBS += -lssl -lcrypto
     endif
-endif
-ifneq (,$(findstring NT,$(UNAME_S))) # Windows (e.g., MINGW)
-    TARGET := $(TARGET).exe
-    LIBS += -lws2_32
-    # OpenSSL on Windows (via vcpkg or manual install)
-    # Adjust OPENSSL_ROOT path as needed
-    OPENSSL_ROOT ?= C:/vcpkg/installed/x64-windows
-    INCLUDES += -I$(OPENSSL_ROOT)/include
-    LIBS += -L$(OPENSSL_ROOT)/lib -lssl -lcrypto
 endif
 
 # Default target executed when you just run `make`
@@ -85,6 +76,43 @@ $(OBJDIR)/%.o: $(NETDIR)/c/%.c
 $(OBJDIR)/%.o: $(SECDIR)/c/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Test configuration
+TEST_SOURCES = $(wildcard $(TESTDIR)/*.c)
+TEST_FRAMEWORK = $(TESTDIR)/test_framework.c
+TEST_BINARIES = $(filter-out $(BINDIR)/test_framework,$(patsubst $(TESTDIR)/test_%.c,$(BINDIR)/test_%,$(TEST_SOURCES)))
+
+# Separate object files for test framework
+TEST_FRAMEWORK_OBJ = $(OBJDIR)/test_framework.o
+
+# Security objects (without xoe.o which contains main())
+SEC_TEST_OBJECTS = $(filter-out $(OBJDIR)/xoe.o,$(OBJECTS))
+
+# Test target - run all unit tests
+.PHONY: test
+test: $(TEST_BINARIES)
+	@echo ""
+	@echo "=== Running Unit Tests ==="
+	@echo ""
+	@for test in $(TEST_BINARIES); do \
+		$$test || exit 1; \
+		echo ""; \
+	done
+	@echo "=== Running Integration Tests ==="
+	@echo ""
+	@./scripts/test_integration.sh
+
+# Pattern rule for test binaries
+# Each test links with test framework, security modules, but NOT xoe.o (which has main())
+$(BINDIR)/test_%: $(TESTDIR)/test_%.c $(TEST_FRAMEWORK_OBJ) $(SEC_TEST_OBJECTS)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(INCLUDES) -I$(TESTDIR) $< $(TEST_FRAMEWORK_OBJ) $(SEC_TEST_OBJECTS) -o $@ $(LIBS)
+	@echo "Built test: $@"
+
+# Compile test framework object
+$(TEST_FRAMEWORK_OBJ): $(TEST_FRAMEWORK)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(INCLUDES) -I$(TESTDIR) -c $< -o $@
 
 # Rule to clean up build artifacts
 .PHONY: clean
