@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <errno.h>
 
 /* POSIX/Unix headers only - Windows support removed */
 #include <unistd.h>
@@ -24,6 +25,12 @@
 #include "tls_io.h"
 #include "tls_error.h"
 #endif
+
+/* Serial connector includes */
+#include "serial_config.h"
+#include "serial_port.h"
+#include "serial_protocol.h"
+#include "serial_client.h"
 
 typedef struct {
     int client_socket;
@@ -188,6 +195,19 @@ void print_usage(const char *prog_name) {
     printf("Client Mode Options:\n");
     printf("  -c <ip>:<port>    Connect to server as client\n");
     printf("                    Example: -c 192.168.1.100:12345\n\n");
+    printf("Serial Connector Options (requires -c for client mode):\n");
+    printf("  -s <device>       Serial device path (e.g., /dev/ttyUSB0)\n");
+    printf("                    Enables serial-to-network bridging\n\n");
+    printf("  -b <baud>         Baud rate (default: 9600)\n");
+    printf("                    Common rates: 9600, 19200, 38400, 57600, 115200\n\n");
+    printf("  --parity <mode>   Parity (default: none)\n");
+    printf("                    Options: none, even, odd\n\n");
+    printf("  --databits <n>    Data bits (default: 8)\n");
+    printf("                    Options: 7, 8\n\n");
+    printf("  --stopbits <n>    Stop bits (default: 1)\n");
+    printf("                    Options: 1, 2\n\n");
+    printf("  --flow <mode>     Flow control (default: none)\n");
+    printf("                    Options: none, xonxoff, rtscts\n\n");
     printf("General Options:\n");
     printf("  -h                Show this help message\n\n");
     printf("Examples:\n");
@@ -198,6 +218,8 @@ void print_usage(const char *prog_name) {
     printf("  %s -p 12345                         # TCP server on port 12345\n", prog_name);
 #endif
     printf("  %s -c 127.0.0.1:12345               # Connect as client\n", prog_name);
+    printf("  %s -c 192.168.1.100:12345 -s /dev/ttyUSB0 -b 115200\n", prog_name);
+    printf("                                      # Serial bridge at 115200 baud\n");
 }
 
 int main(int argc, char *argv[]) {
@@ -207,11 +229,19 @@ int main(int argc, char *argv[]) {
     int connect_server_port = 0;
     int opt = 0;
     char *colon = NULL;
+    serial_config_t serial_config;
+    char *serial_device = NULL;
+    int use_serial = FALSE;
 #if TLS_ENABLED
     int encryption_mode = ENCRYPT_NONE; /* Default to no encryption */
     char cert_path[TLS_CERT_PATH_MAX];
     char key_path[TLS_CERT_PATH_MAX];
+#endif
 
+    /* Initialize serial config with defaults */
+    serial_config_init_defaults(&serial_config);
+
+#if TLS_ENABLED
     /* Initialize with default paths */
     strncpy(cert_path, TLS_DEFAULT_CERT_FILE, TLS_CERT_PATH_MAX - 1);
     cert_path[TLS_CERT_PATH_MAX - 1] = '\0';
@@ -219,7 +249,7 @@ int main(int argc, char *argv[]) {
     key_path[TLS_CERT_PATH_MAX - 1] = '\0';
 #endif
 
-    while ((opt = getopt(argc, argv, "i:p:c:e:h")) != -1) {
+    while ((opt = getopt(argc, argv, "i:p:c:e:s:b:h")) != -1) {
         switch (opt) {
             case 'i':
                 listen_address = optarg;
@@ -267,6 +297,18 @@ int main(int argc, char *argv[]) {
                 exit(EXIT_FAILURE);
 #endif
                 break;
+            case 's':
+                serial_device = optarg;
+                use_serial = TRUE;
+                break;
+            case 'b':
+                serial_config.baud_rate = atoi(optarg);
+                if (serial_config.baud_rate <= 0) {
+                    fprintf(stderr, "Invalid baud rate: %s\n", optarg);
+                    print_usage(argv[0]);
+                    exit(EXIT_FAILURE);
+                }
+                break;
             case 'h':
                 print_usage(argv[0]);
                 exit(EXIT_SUCCESS);
@@ -276,9 +318,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
-#if TLS_ENABLED
-    /* Parse remaining arguments for long options (-cert and -key) */
+    /* Parse remaining arguments for long options */
     while (optind < argc) {
+#if TLS_ENABLED
         if (strcmp(argv[optind], "-cert") == 0 || strcmp(argv[optind], "--cert") == 0) {
             if (optind + 1 >= argc) {
                 fprintf(stderr, "Option %s requires an argument\n", argv[optind]);
@@ -297,13 +339,90 @@ int main(int argc, char *argv[]) {
             strncpy(key_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
             key_path[TLS_CERT_PATH_MAX - 1] = '\0';
             optind += 2;
+        } else
+#endif
+        if (strcmp(argv[optind], "--parity") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option --parity requires an argument\n");
+                print_usage(argv[0]);
+                exit(EXIT_FAILURE);
+            }
+            if (strcmp(argv[optind + 1], "none") == 0) {
+                serial_config.parity = SERIAL_PARITY_NONE;
+            } else if (strcmp(argv[optind + 1], "even") == 0) {
+                serial_config.parity = SERIAL_PARITY_EVEN;
+            } else if (strcmp(argv[optind + 1], "odd") == 0) {
+                serial_config.parity = SERIAL_PARITY_ODD;
+            } else {
+                fprintf(stderr, "Invalid parity: %s (use none, even, or odd)\n", argv[optind + 1]);
+                exit(EXIT_FAILURE);
+            }
+            optind += 2;
+        } else if (strcmp(argv[optind], "--databits") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option --databits requires an argument\n");
+                print_usage(argv[0]);
+                exit(EXIT_FAILURE);
+            }
+            serial_config.data_bits = atoi(argv[optind + 1]);
+            if (serial_config.data_bits != 7 && serial_config.data_bits != 8) {
+                fprintf(stderr, "Invalid data bits: %s (use 7 or 8)\n", argv[optind + 1]);
+                exit(EXIT_FAILURE);
+            }
+            optind += 2;
+        } else if (strcmp(argv[optind], "--stopbits") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option --stopbits requires an argument\n");
+                print_usage(argv[0]);
+                exit(EXIT_FAILURE);
+            }
+            serial_config.stop_bits = atoi(argv[optind + 1]);
+            if (serial_config.stop_bits != 1 && serial_config.stop_bits != 2) {
+                fprintf(stderr, "Invalid stop bits: %s (use 1 or 2)\n", argv[optind + 1]);
+                exit(EXIT_FAILURE);
+            }
+            optind += 2;
+        } else if (strcmp(argv[optind], "--flow") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option --flow requires an argument\n");
+                print_usage(argv[0]);
+                exit(EXIT_FAILURE);
+            }
+            if (strcmp(argv[optind + 1], "none") == 0) {
+                serial_config.flow_control = SERIAL_FLOW_NONE;
+            } else if (strcmp(argv[optind + 1], "xonxoff") == 0) {
+                serial_config.flow_control = SERIAL_FLOW_XONXOFF;
+            } else if (strcmp(argv[optind + 1], "rtscts") == 0) {
+                serial_config.flow_control = SERIAL_FLOW_RTSCTS;
+            } else {
+                fprintf(stderr, "Invalid flow control: %s (use none, xonxoff, or rtscts)\n",
+                        argv[optind + 1]);
+                exit(EXIT_FAILURE);
+            }
+            optind += 2;
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[optind]);
             print_usage(argv[0]);
             exit(EXIT_FAILURE);
         }
     }
-#endif
+
+    /* Validate serial mode configuration */
+    if (use_serial) {
+        if (connect_server_ip == NULL) {
+            fprintf(stderr, "Serial mode (-s) requires client mode (-c)\n");
+            print_usage(argv[0]);
+            exit(EXIT_FAILURE);
+        }
+        if (serial_device == NULL) {
+            fprintf(stderr, "Serial device not specified\n");
+            print_usage(argv[0]);
+            exit(EXIT_FAILURE);
+        }
+        /* Set device path in config */
+        strncpy(serial_config.device_path, serial_device, SERIAL_DEVICE_PATH_MAX - 1);
+        serial_config.device_path[SERIAL_DEVICE_PATH_MAX - 1] = '\0';
+    }
 
     if (connect_server_ip != NULL) {
         /* Act as a client */
@@ -331,32 +450,75 @@ int main(int argc, char *argv[]) {
         }
 
         printf("Connected to server %s:%d\n", connect_server_ip, connect_server_port);
-        printf("Enter messages to send (type 'exit' to quit):\n");
 
-        while (TRUE) {
-            printf("> ");
-            if (fgets(buffer, BUFFER_SIZE, stdin) == NULL) {
-                break; /* EOF or error */
+        if (use_serial) {
+            /* Serial client mode - bridge serial port to network */
+            serial_client_t* serial_client;
+            int result;
+
+            printf("Serial mode enabled: %s at %d baud\n",
+                   serial_config.device_path, serial_config.baud_rate);
+
+            /* Initialize serial client */
+            serial_client = serial_client_init(&serial_config, sock);
+            if (serial_client == NULL) {
+                fprintf(stderr, "Failed to initialize serial client\n");
+                close(sock);
+                exit(EXIT_FAILURE);
             }
 
-            /* Remove newline character if present */
-            buffer[strcspn(buffer, "\n")] = 0;
+            printf("Serial port opened successfully\n");
 
-            if (strcmp(buffer, "exit") == 0) {
-                break;
+            /* Start I/O threads */
+            result = serial_client_start(serial_client);
+            if (result != 0) {
+                fprintf(stderr, "Failed to start serial client threads: %d\n", result);
+                serial_client_cleanup(&serial_client);
+                close(sock);
+                exit(EXIT_FAILURE);
             }
 
-            send(sock, buffer, strlen(buffer), 0);
-            bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
-            if (bytes_received > 0) {
-                buffer[bytes_received] = '\0';
-                printf("Server response: %s\n", buffer);
-            } else if (bytes_received == 0) {
-                printf("Server disconnected.\n");
-                break;
-            } else {
-                perror("recv failed");
-                break;
+            printf("Serial bridge active (Ctrl+C to exit)\n");
+
+            /* Main thread waits for shutdown signal (Ctrl+C handled by signal handler) */
+            while (!serial_client_should_shutdown(serial_client)) {
+                sleep(1);
+            }
+
+            /* Stop threads and cleanup */
+            printf("\nShutting down serial bridge...\n");
+            serial_client_stop(serial_client);
+            serial_client_cleanup(&serial_client);
+            printf("Serial port closed\n");
+        } else {
+            /* Standard client mode - stdin/stdout */
+            printf("Enter messages to send (type 'exit' to quit):\n");
+
+            while (TRUE) {
+                printf("> ");
+                if (fgets(buffer, BUFFER_SIZE, stdin) == NULL) {
+                    break; /* EOF or error */
+                }
+
+                /* Remove newline character if present */
+                buffer[strcspn(buffer, "\n")] = 0;
+
+                if (strcmp(buffer, "exit") == 0) {
+                    break;
+                }
+
+                send(sock, buffer, strlen(buffer), 0);
+                bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
+                if (bytes_received > 0) {
+                    buffer[bytes_received] = '\0';
+                    printf("Server response: %s\n", buffer);
+                } else if (bytes_received == 0) {
+                    printf("Server disconnected.\n");
+                    break;
+                } else {
+                    perror("recv failed");
+                    break;
+                }
             }
         }
 

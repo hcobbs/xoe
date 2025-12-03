@@ -14,20 +14,23 @@ NETDIR   = $(COREDIR)/server/net
 SECDIR   = $(COREDIR)/server/security
 TESTDIR  = $(COREDIR)/server/tests
 PACKETDIR= $(COREDIR)/packet_manager
+SERIALDIR= $(SRCDIR)/connector/serial
 
 
 # Source files
 # Automatically find all .c files
 SOURCES = $(wildcard $(NETDIR)/c/*.c)
 SOURCES += $(wildcard $(SECDIR)/c/*.c)
+SOURCES += $(wildcard $(SERIALDIR)/c/*.c)
 
 # Object files
 # Create a corresponding .o file in the OBJDIR for each .c file
 OBJECTS = $(patsubst $(NETDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(NETDIR)/c/*.c))
 OBJECTS += $(patsubst $(SECDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(SECDIR)/c/*.c))
+OBJECTS += $(patsubst $(SERIALDIR)/c/%.c,$(OBJDIR)/%.o,$(wildcard $(SERIALDIR)/c/*.c))
 
 # Include paths for headers
-INCLUDES = -I$(NETDIR)/h -I$(SECDIR)/h -I$(PACKETDIR)/h -I$(COMMONDIR)/h
+INCLUDES = -I$(NETDIR)/h -I$(SECDIR)/h -I$(PACKETDIR)/h -I$(COMMONDIR)/h -I$(SERIALDIR)/h
 
 # Target executable
 TARGET_NAME = xoe
@@ -74,6 +77,11 @@ $(OBJDIR)/%.o: $(NETDIR)/c/%.c
 
 # Pattern rule to compile security source files
 $(OBJDIR)/%.o: $(SECDIR)/c/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+
+# Pattern rule to compile serial connector source files
+$(OBJDIR)/%.o: $(SERIALDIR)/c/%.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
