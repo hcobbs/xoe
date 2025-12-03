@@ -458,11 +458,7 @@ int main(int argc, char *argv[]) {
             int net_bytes = 0;
             unsigned char serial_buffer[SERIAL_READ_CHUNK_SIZE];
             xoe_packet_t tx_packet;
-            xoe_packet_t rx_packet;
-            uint32_t actual_len = 0;
             uint16_t sequence_tx = 0;
-            uint16_t sequence_rx = 0;
-            uint16_t flags = 0;
 
             printf("Serial mode enabled: %s at %d baud\n",
                    serial_config.device_path, serial_config.baud_rate);

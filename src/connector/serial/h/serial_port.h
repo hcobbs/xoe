@@ -13,9 +13,7 @@
 #define SERIAL_PORT_H
 
 #include "serial_config.h"
-
-/* Fixed-width integer types (C89 compatible) */
-typedef unsigned short uint16_t;
+#include "../../../core/packet_manager/h/protocol.h"
 
 /**
  * @brief Open and configure a serial port
