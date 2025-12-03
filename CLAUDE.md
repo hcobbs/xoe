@@ -34,6 +34,37 @@ Testing with telnet:
 telnet localhost 12345
 ```
 
+## Git Workflow
+
+**IMPORTANT**: All code changes must be developed on feature branches and submitted via pull requests. Do not commit code changes directly to `main`.
+
+### Branch-Based Development
+
+**Branch Naming Conventions**:
+- `feature/<description>` - New features or enhancements
+- `bugfix/<description>` - Bug fixes
+- `refactor/<description>` - Code refactoring
+- `test/<description>` - Test additions or improvements
+
+**Development Process**:
+1. Create a new branch from `main`: `git checkout -b feature/your-feature-name`
+2. Make your changes and commit with appropriate labels ([CLASSIC], [LLM-ASSISTED], or [VIBE])
+3. Push the branch: `git push -u origin feature/your-feature-name`
+4. Create a pull request to merge into `main`
+5. Ensure PR checklist is complete before merging
+
+**Exception**: Documentation-only changes (*.md files only) may be committed directly to `main`.
+
+**Pre-PR Checklist**:
+- [ ] Code builds successfully: `make`
+- [ ] Code follows ANSI-C (C89) standards with `-std=c89 -pedantic`
+- [ ] No compiler warnings with `-Wall -Wextra`
+- [ ] All functions have complete documentation (purpose, parameters, return values, errors)
+- [ ] Code has complete test coverage
+- [ ] Helper functions are reusable and well-documented
+- [ ] Commits include contribution label ([CLASSIC], [LLM-ASSISTED], or [VIBE])
+- [ ] Changes align with Clean Code principles (see Coding Standards section)
+
 ## Architecture
 
 ### Language Standard
@@ -85,6 +116,22 @@ The server (`src/core/server/net/c/xoe.c`) currently implements:
 - Simple client mode for testing
 
 Platform-specific network code is handled via `#ifdef _WIN32` blocks (Winsock2 vs BSD sockets).
+
+## Code Formatting
+
+**Indentation**:
+- Use **4 spaces** for indentation (no tabs)
+- Consistent indentation for all code blocks
+
+**Line Length**:
+- Preferred: 80-100 characters (soft limit)
+- Maximum: 120 characters (hard limit)
+- Break long lines at logical points (after commas, operators, etc.)
+
+**General Style**:
+- Opening braces on same line for functions and control structures
+- Consistent spacing around operators and after keywords
+- Clear, readable code structure preferred over compact formatting
 
 ## Coding Standards and Preferences
 
