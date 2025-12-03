@@ -30,6 +30,7 @@
 #include "serial_config.h"
 #include "serial_port.h"
 #include "serial_protocol.h"
+#include "serial_client.h"
 
 typedef struct {
     int client_socket;
@@ -452,64 +453,42 @@ int main(int argc, char *argv[]) {
 
         if (use_serial) {
             /* Serial client mode - bridge serial port to network */
-            int serial_fd = 0;
-            int result = 0;
-            int serial_bytes = 0;
-            int net_bytes = 0;
-            unsigned char serial_buffer[SERIAL_READ_CHUNK_SIZE];
-            xoe_packet_t tx_packet;
-            uint16_t sequence_tx = 0;
+            serial_client_t* serial_client;
+            int result;
 
             printf("Serial mode enabled: %s at %d baud\n",
                    serial_config.device_path, serial_config.baud_rate);
 
-            /* Open serial port */
-            result = serial_port_open(&serial_config, &serial_fd);
-            if (result != 0) {
-                fprintf(stderr, "Failed to open serial port %s: error %d\n",
-                        serial_config.device_path, result);
+            /* Initialize serial client */
+            serial_client = serial_client_init(&serial_config, sock);
+            if (serial_client == NULL) {
+                fprintf(stderr, "Failed to initialize serial client\n");
                 close(sock);
                 exit(EXIT_FAILURE);
             }
 
             printf("Serial port opened successfully\n");
-            printf("Serial bridge active (Ctrl+C to exit)\n");
 
-            /* Simple single-threaded loop for Phase 3 */
-            /* TODO: Phase 4 will add multi-threading and proper flow control */
-            while (TRUE) {
-                /* Read from serial port (non-blocking with short timeout) */
-                serial_bytes = serial_port_read(serial_fd, serial_buffer,
-                                                SERIAL_READ_CHUNK_SIZE, 10);
-                if (serial_bytes > 0) {
-                    /* Encapsulate and send to network */
-                    result = serial_protocol_encapsulate(serial_buffer, serial_bytes,
-                                                         sequence_tx++, 0, &tx_packet);
-                    if (result == 0) {
-                        /* For now, send raw payload data (Phase 4 will send full packet) */
-                        send(sock, tx_packet.payload->data, tx_packet.payload->len, 0);
-                        serial_protocol_free_payload(&tx_packet);
-                    }
-                } else if (serial_bytes < 0) {
-                    fprintf(stderr, "Serial read error: %d\n", serial_bytes);
-                    break;
-                }
-
-                /* Read from network (non-blocking) */
-                net_bytes = recv(sock, buffer, BUFFER_SIZE - 1, MSG_DONTWAIT);
-                if (net_bytes > 0) {
-                    /* For now, write raw data to serial (Phase 4 will decapsulate packets) */
-                    serial_port_write(serial_fd, buffer, net_bytes);
-                } else if (net_bytes == 0) {
-                    printf("Server disconnected.\n");
-                    break;
-                } else if (net_bytes < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-                    perror("recv failed");
-                    break;
-                }
+            /* Start I/O threads */
+            result = serial_client_start(serial_client);
+            if (result != 0) {
+                fprintf(stderr, "Failed to start serial client threads: %d\n", result);
+                serial_client_cleanup(&serial_client);
+                close(sock);
+                exit(EXIT_FAILURE);
             }
 
-            serial_port_close(serial_fd);
+            printf("Serial bridge active (Ctrl+C to exit)\n");
+
+            /* Main thread waits for shutdown signal (Ctrl+C handled by signal handler) */
+            while (!serial_client_should_shutdown(serial_client)) {
+                sleep(1);
+            }
+
+            /* Stop threads and cleanup */
+            printf("\nShutting down serial bridge...\n");
+            serial_client_stop(serial_client);
+            serial_client_cleanup(&serial_client);
             printf("Serial port closed\n");
         } else {
             /* Standard client mode - stdin/stdout */
