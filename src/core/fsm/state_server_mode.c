@@ -11,6 +11,8 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/select.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <signal.h>
 
@@ -135,6 +137,30 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
 
     /* Main accept loop */
     while (!g_server_shutdown) {
+        fd_set readfds;
+        struct timeval timeout;
+        int select_result;
+
+        /* Use select() with timeout to allow signal checking */
+        FD_ZERO(&readfds);
+        FD_SET(server_fd, &readfds);
+        timeout.tv_sec = 1;  /* 1 second timeout */
+        timeout.tv_usec = 0;
+
+        select_result = select(server_fd + 1, &readfds, NULL, NULL, &timeout);
+
+        if (select_result < 0) {
+            if (g_server_shutdown) break;
+            perror("select");
+            continue;
+        }
+
+        if (select_result == 0) {
+            /* Timeout - check shutdown flag and continue */
+            continue;
+        }
+
+        /* Socket is ready for accept() */
         client_info = acquire_client_slot();
         if (client_info == NULL) {
             fprintf(stderr, "Max clients (%d) reached, rejecting connection\n", MAX_CLIENTS);
@@ -151,6 +177,10 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
                             (struct sockaddr *)&client_info->client_addr,
                             (socklen_t *)&addrlen);
         if (new_socket < 0) {
+            if (g_server_shutdown) {
+                release_client_slot(client_info);
+                break;
+            }
             perror("accept");
             release_client_slot(client_info);
             continue;
