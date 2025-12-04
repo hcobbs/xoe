@@ -40,7 +40,7 @@ This project is also a testbed for human-LLM hybrid development. All contributio
 - `make` - Build the xoe server for current OS (auto-detects and links appropriate libraries)
 - `make clean` - Remove all build artifacts (obj/ and bin/ directories)
 
-The built binary will be at `bin/xoe` (or `bin/xoe.exe` on Windows).
+The built binary will be at `bin/xoe`.
 
 ## Running the Server
 
@@ -124,7 +124,7 @@ telnet localhost 12345
 
 ### Language Standard
 - **ANSI-C (C89)** (`-std=c89 -pedantic`) with strict warnings (`-Wall -Wextra`)
-- Cross-platform support for Linux, macOS, and Windows
+- Cross-platform support for Linux, macOS, and BSD (Unix/POSIX only)
 - Fixed-width integer types (`uint16_t`, `uint32_t`) defined via typedefs (C89 doesn't have `stdint.h`)
 
 ### Directory Structure
@@ -286,7 +286,7 @@ socat -d -d pty,raw,echo=0 pty,raw,echo=0
 This project follows Clean Code principles with emphasis on:
 
 - **Spaces for Alignment**: tabs are banned from use for alignment purposes.  Anything other than spaces used for alignment fail the code review and will not be accepted.
-- **Maximum Code Widt**: 120 Characters maximum line length. Use appropriate escapes to aling variables of a function cleanly and clearly readable.
+- **Maximum Code Width**: 120 Characters maximum line length. Use appropriate escapes to align variables of a function cleanly and clearly readable.
 - **Reusable Helper Functions**: Prefer creating helper functions that can be reused multiple times rather than duplicating code
 - **Complete Documentation**: All code must be thoroughly documented with clear comments explaining purpose, parameters, return values, and any side effects
 - **Full Test Coverage**: All code should have complete test coverage to ensure reliability and maintainability
