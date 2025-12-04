@@ -79,7 +79,7 @@ Before submitting a pull request, ensure:
 ### Language Standard
 
 - **ANSI-C (C89)** with strict compliance: `-std=c89 -pedantic`
-- Cross-platform support for Linux, macOS, and Windows
+- Cross-platform support for Linux, macOS, and BSD (Unix/POSIX only, Windows not supported)
 - No C99/C11 features
 
 ### Code Formatting

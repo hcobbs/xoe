@@ -810,7 +810,7 @@ Current limits (compile-time, edit `xoe.h`):
 
 To change, edit and recompile:
 ```bash
-# Edit src/core/server/net/h/xoe.h
+# Edit src/core/config.h
 #define MAX_CLIENTS 128
 
 # Rebuild

@@ -17,7 +17,6 @@ Welcome to the XOE (X over Ethernet) project documentation.
 ## Design Documents
 
 - [Serial Connector](design/SERIAL_CONNECTOR.md) - Serial bridge architecture and design
-- [Architecture Overview](design/ARCHITECTURE.md) - System architecture and component design
 
 ## Archive
 
@@ -39,8 +38,7 @@ docs/
 │   ├── CODE_REVIEW.md
 │   └── CONTRIBUTING.md
 ├── design/                        # Design documents
-│   ├── SERIAL_CONNECTOR.md
-│   └── ARCHITECTURE.md
+│   └── SERIAL_CONNECTOR.md
 └── archive/                       # Historical documents
     ├── IMPLEMENTATION_STATUS.md
     └── DIRECTORY_REORGANIZATION.md

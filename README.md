@@ -182,18 +182,31 @@ nc localhost 12345
 ```
 xoe/
 ├── src/
-│   ├── common/
-│   │   └── h/commonDefinitions.h    # Error codes, constants
-│   ├── core/
-│   │   ├── server/
-│   │   │   ├── net/                 # Network server
-│   │   │   │   ├── c/xoe.c          # Main server implementation
-│   │   │   │   └── h/xoe.h          # Server configuration
-│   │   │   ├── security/            # TLS implementation
-│   │   │   │   ├── h/               # TLS headers
-│   │   │   │   └── c/               # TLS implementation
-│   │   │   └── tests/               # Unit tests (in development)
-│   │   └── packet_manager/          # Protocol handlers (planned)
+│   ├── lib/                         # Reusable library components
+│   │   ├── common/                  # Common definitions and types
+│   │   │   ├── types.h              # Fixed-width integer typedefs
+│   │   │   └── definitions.h        # Boolean defines, error codes
+│   │   ├── protocol/                # Protocol definitions
+│   │   │   └── protocol.h           # xoe_packet_t, xoe_payload_t
+│   │   └── security/                # TLS/SSL support
+│   │       ├── tls_config.h, tls_context.c/h
+│   │       ├── tls_error.c/h, tls_io.c/h
+│   │       └── tls_session.c/h, tls_types.h
+│   ├── core/                        # Core XOE application
+│   │   ├── main.c                   # Entry point (FSM loop)
+│   │   ├── config.h                 # Configuration structures
+│   │   ├── server.c/h               # Server implementation
+│   │   └── fsm/                     # State machine handlers (8 files)
+│   ├── connectors/                  # Pluggable protocol connectors
+│   │   └── serial/                  # Serial TTY connector (9 files)
+│   └── tests/                       # Test infrastructure
+│       ├── framework/               # Test framework
+│       └── unit/                    # Unit tests
+├── docs/                            # Documentation
+│   ├── guides/                      # User/operator guides
+│   ├── development/                 # Developer documentation
+│   ├── design/                      # Design documents
+│   └── archive/                     # Historical documents
 ├── scripts/
 │   └── generate_test_certs.sh       # Certificate generation
 ├── Makefile                         # Build system
@@ -292,28 +305,36 @@ leaks --atExit -- ./bin/xoe -e none -p 12345
 
 ### Human-LLM Hybrid Development
 
-This project is a testbed for human-LLM collaboration. Contributions are accepted from:
+This project is a testbed for human-LLM collaboration. All contributions must be clearly labeled by development approach.
 
-1. **Classic Coders** - Traditional hand-written code
-2. **LLM-Assisted Coders** - Human developers using LLMs as tools
-3. **Vibe Coders** - Developers primarily directing LLMs
+### Contribution Labels
 
-**IMPORTANT**: All contributions must be clearly labeled with the development method used.
+All commits must include one of these labels:
 
-### Contribution Categories
+| Label | Description | Use Case |
+|-------|-------------|----------|
+| `[CLASSIC]` | Traditional hand-coded implementation without AI assistance | Pure human coding |
+| `[CLASSIC-REVIEW]` | Traditional human-run code review | Human review of any code |
+| `[LLM-ASSISTED]` | Code written with LLM assistance (pair programming style) | Human-AI collaboration |
+| `[LLM-ARCH]` | Software architect leveraging LLM for code generation while reviewing, adjusting, and confirming all plans | Architect-directed AI coding |
+| `[LLM-REVIEW]` | LLM-powered code review and resulting fixes | AI-assisted review |
+| `[VIBE]` | Experimental or exploratory coding | Rapid prototyping, experiments |
 
-**Label your contributions** in commit messages:
+**Example Commit Messages**:
 
 ```
 [CLASSIC] Implemented thread pool manager
+[CLASSIC-REVIEW] Fixed buffer overflow after manual code review
 [LLM-ASSISTED] Refactored TLS error handling with Claude's suggestions
-[VIBE] Added certificate rotation feature via Claude Code
+[LLM-ARCH] Implemented serial connector based on approved design plan
+[LLM-REVIEW] Fixed memory leak identified by Claude Code analysis
+[VIBE] Added experimental certificate rotation feature
 ```
 
 **Labeling Requirements**:
-- First-time contributors must declare their category
-- Each commit should indicate the development method
-- Continuous improper labeling will lead to revocation of merge permissions
+- Every commit must include exactly one label
+- First-time contributors must declare their primary development approach
+- Consistent mislabeling will lead to revocation of merge permissions
 
 ### Contribution Process
 

@@ -222,7 +222,7 @@ TLS_CHACHA20_POLY1305_SHA256    // Best for ARM/mobile
 - Ordered by security strength
 
 **Customization** (requires recompilation):
-Edit `src/core/server/security/h/tls_config.h`:
+Edit `src/lib/security/tls_config.h`:
 ```c
 #define TLS_CIPHER_SUITES "TLS_AES_256_GCM_SHA384:..."
 ```
@@ -256,7 +256,7 @@ Edit `src/core/server/security/h/tls_config.h`:
 
 **Disable** (requires code change):
 ```c
-/* In tls_context.c:84-86, comment out: */
+/* In src/lib/security/tls_context.c, comment out: */
 // SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER);
 // SSL_CTX_set_timeout(ctx, TLS_SESSION_TIMEOUT);
 ```
