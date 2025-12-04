@@ -208,29 +208,47 @@ make all      # Same as make
 
 ### Testing
 
-**Unit Tests** (in development):
+**Quick Start**:
 ```bash
+# Run all tests (recommended)
 make test
+
+# Comprehensive validation (build + test)
+make check
 ```
 
-**Integration Tests** (manual):
+**Available Test Targets**:
 ```bash
-# Test TLS 1.3
-./bin/xoe -e tls13 &
-SERVER_PID=$!
-echo "test" | openssl s_client -connect localhost:12345 -tls1_3 -CAfile ./certs/server.crt -quiet
-kill $SERVER_PID
-
-# Test plain TCP
-./bin/xoe -e none &
-SERVER_PID=$!
-echo "test" | nc localhost 12345
-kill $SERVER_PID
+make test-build        # Compile tests without running
+make test-unit         # Run unit tests only (68 tests)
+make test-integration  # Run integration tests only (8 tests)
+make test-verbose      # Run all tests with detailed output
 ```
+
+**Current Test Coverage**:
+- **Unit Tests**: 68 tests across 6 modules
+  - TLS Security: 22 tests (context, error, I/O, session)
+  - Serial Buffer: 21 tests (init, read/write, wrap-around, state)
+  - Serial Protocol: 25 tests (encapsulation, decapsulation, checksums)
+- **Integration Tests**: 8 end-to-end scenarios (TCP/TLS modes, concurrent connections)
+
+**Test Requirements**:
+- TLS tests require certificates: `./scripts/generate_test_certs.sh`
+- Integration tests require `bin/xoe` binary: `make`
+
+**Detailed Documentation**: See [docs/TESTING.md](docs/TESTING.md) for:
+- Test framework reference (all assertion macros)
+- Writing unit tests (templates, best practices)
+- Debugging test failures
+- Contributing tests
 
 **Memory Leak Testing**:
 ```bash
+# Linux
 valgrind --leak-check=full ./bin/xoe -e none -p 12345
+
+# macOS
+leaks --atExit -- ./bin/xoe -e none -p 12345
 ```
 
 ### Code Style

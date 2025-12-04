@@ -268,3 +268,51 @@ This project follows Clean Code principles with emphasis on:
 - All functions should have corresponding unit tests
 - Edge cases and error conditions must be tested
 - Test coverage should be comprehensive and maintainable
+
+## Testing Guidelines
+
+### Running Tests
+
+Before submitting a PR, ensure all tests pass:
+
+```bash
+make check    # Comprehensive validation (recommended)
+```
+
+Individual test targets:
+
+```bash
+make test-build        # Compile tests only
+make test-unit         # Run unit tests
+make test-integration  # Run integration tests
+make test              # Run all tests
+make test-verbose      # Detailed output
+```
+
+### Test Requirements for PRs
+
+Pre-PR checklist requires:
+- [ ] All tests compile (`make test-build`)
+- [ ] All tests pass (`make test`)
+- [ ] New code has corresponding unit tests
+- [ ] Test coverage is comprehensive
+
+### Common Test Issues
+
+**Issue:** Tests fail to compile after refactoring
+**Solution:** Check all test files have updated header includes to match new directory structure
+
+**Issue:** Integration tests fail
+**Solution:** Ensure `bin/xoe` is built and certificates exist in `./certs/` (run `./scripts/generate_test_certs.sh`)
+
+**Issue:** TLS tests fail
+**Solution:** Run `./scripts/generate_test_certs.sh` to create test certificates
+
+### Test Documentation
+
+For comprehensive testing documentation, see [docs/TESTING.md](docs/TESTING.md):
+- Test framework reference (all assertion macros)
+- Writing unit tests (templates, best practices)
+- Integration tests (requirements, adding new tests)
+- Debugging test failures
+- Test coverage guidelines
