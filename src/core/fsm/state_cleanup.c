@@ -8,6 +8,11 @@
 #include <stddef.h>
 #include "core/config.h"
 
+#if TLS_ENABLED
+#include "core/server.h"
+#include "lib/security/tls_context.h"
+#endif
+
 /**
  * state_cleanup - Cleanup resources before exit
  * @config: Pointer to configuration structure
@@ -16,8 +21,8 @@
  *
  * Cleanup operations:
  * - Free dynamically allocated serial configuration
- * - Close any open file descriptors
- * - Release other resources
+ * - Cleanup global TLS context (if TLS enabled)
+ * - Release other dynamically allocated resources
  *
  * This is the final state before application exit. All resources
  * allocated during state_init() or subsequent states must be freed here.
@@ -34,9 +39,16 @@ xoe_state_t state_cleanup(xoe_config_t *config) {
         config->serial_config = NULL;
     }
 
+#if TLS_ENABLED
+    /* Cleanup global TLS context if still allocated */
+    if (g_tls_ctx != NULL) {
+        tls_context_cleanup(g_tls_ctx);
+        g_tls_ctx = NULL;
+    }
+#endif
+
     /* Additional cleanup can be added here as needed:
      * - Close open sockets
-     * - Free TLS contexts
      * - Release other dynamically allocated resources
      */
 
