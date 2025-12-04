@@ -29,7 +29,7 @@ The XOE project employs a multi-layered testing strategy:
 ### Test Philosophy
 
 - **Comprehensive Coverage**: All critical modules should have unit tests
-- **Test-Driven Quality**: Tests are mandatory for PRs (see Pre-PR Checklist in CLAUDE.md)
+- **Test-Driven Quality**: Tests are mandatory for PRs (see Pre-PR Checklist in [CONTRIBUTING.md](CONTRIBUTING.md))
 - **Fast Feedback**: Unit tests run in <1 second, integration tests in <10 seconds
 - **Maintainable**: Tests should be clear, well-documented, and easy to update
 
@@ -598,7 +598,7 @@ Unit tests should run fast (<1 second total). If tests are slow:
 
 ### Before Submitting a PR
 
-Pre-PR checklist (from CLAUDE.md):
+Pre-PR checklist (from [CONTRIBUTING.md](CONTRIBUTING.md)):
 
 - [ ] Code builds successfully (`make`)
 - [ ] All tests compile (`make test-build`)
@@ -711,4 +711,4 @@ bin/
 
 **Last Updated**: December 2025
 **Maintained By**: XOE Development Team
-**Related Docs**: [CLAUDE.md](../CLAUDE.md), [README.md](../README.md)
+**Related Docs**: [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_REVIEW.md](CODE_REVIEW.md), [Documentation Index](../README.md)

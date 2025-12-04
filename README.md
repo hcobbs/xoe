@@ -84,7 +84,7 @@ make clean && make
 sudo install -m 755 bin/xoe /usr/local/bin/
 ```
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for production installation instructions.
+See [docs/guides/DEPLOYMENT.md](docs/guides/DEPLOYMENT.md) for production installation instructions.
 
 ---
 
@@ -160,9 +160,17 @@ nc localhost 12345
 
 ## Documentation
 
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Installation, configuration, and production deployment
-- **[SECURITY.md](SECURITY.md)** - TLS configuration, certificate management, and security best practices
-- **[CODE_REVIEW.md](CODE_REVIEW.md)** - Technical code review and architecture analysis
+### Quick Links
+
+- **[docs/README.md](docs/README.md)** - Complete documentation index
+- **[docs/guides/DEPLOYMENT.md](docs/guides/DEPLOYMENT.md)** - Installation, configuration, and production deployment
+- **[docs/guides/SECURITY.md](docs/guides/SECURITY.md)** - TLS configuration, certificate management, and security best practices
+
+### Developer Resources
+
+- **[docs/development/TESTING.md](docs/development/TESTING.md)** - Test framework and testing guide
+- **[docs/development/CODE_REVIEW.md](docs/development/CODE_REVIEW.md)** - Technical code review and architecture analysis
+- **[docs/development/CONTRIBUTING.md](docs/development/CONTRIBUTING.md)** - How to contribute to XOE
 - **[CLAUDE.md](CLAUDE.md)** - Project instructions for Claude Code (AI assistant)
 
 ---
@@ -236,7 +244,7 @@ make test-verbose      # Run all tests with detailed output
 - TLS tests require certificates: `./scripts/generate_test_certs.sh`
 - Integration tests require `bin/xoe` binary: `make`
 
-**Detailed Documentation**: See [docs/TESTING.md](docs/TESTING.md) for:
+**Detailed Documentation**: See [docs/development/TESTING.md](docs/development/TESTING.md) for:
 - Test framework reference (all assertion macros)
 - Writing unit tests (templates, best practices)
 - Debugging test failures
@@ -390,7 +398,7 @@ This project is a testbed for human-LLM collaboration. Contributions are accepte
 
 Contact: (security contact email here)
 
-See [SECURITY.md](SECURITY.md) for detailed security guidelines.
+See [docs/guides/SECURITY.md](docs/guides/SECURITY.md) for detailed security guidelines.
 
 ---
 

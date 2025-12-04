@@ -342,7 +342,7 @@ Pre-PR checklist requires:
 
 ### Test Documentation
 
-For comprehensive testing documentation, see [docs/TESTING.md](docs/TESTING.md):
+For comprehensive testing documentation, see [docs/development/TESTING.md](docs/development/TESTING.md):
 - Test framework reference (all assertion macros)
 - Writing unit tests (templates, best practices)
 - Integration tests (requirements, adding new tests)

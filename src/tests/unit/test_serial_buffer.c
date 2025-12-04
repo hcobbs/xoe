@@ -170,7 +170,7 @@ void test_buffer_read_empty_closed(void) {
  * TODO: Redesign this test to use a separate reader thread or test
  * the blocking behavior explicitly with timeouts.
  *
- * Tracked in: docs/TESTING.md Known Issues section
+ * Tracked in: docs/development/TESTING.md Known Issues section
  */
 void test_buffer_write_partial_DISABLED(void) {
     printf("  SKIPPED: test_buffer_write_partial (blocks indefinitely)\n");
