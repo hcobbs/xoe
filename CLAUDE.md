@@ -2,6 +2,30 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Model Selection Strategy
+
+This project uses different Claude models optimized for specific task types:
+
+**Claude Opus 4.5** (`model="opus"`):
+- Planning and architectural design (Plan agent)
+- Code reviews and PR analysis
+- Complex debugging and root cause analysis
+- Critical design decisions requiring maximum reasoning capability
+
+**Claude Sonnet 4.5** (`model="sonnet"`):
+- General code development and implementation
+- Feature implementation based on approved plans
+- Code refactoring and improvements
+- Most day-to-day coding tasks (default for implementation)
+
+**Claude Haiku 4** (`model="haiku"`):
+- Git operations (commits, branches, PRs)
+- Simple file operations and quick fixes
+- Trivial edits and repetitive tasks
+- Fast turnaround tasks where speed matters
+
+When spawning agents via the Task tool, Claude Code should select the appropriate model based on task complexity and type. This strategy optimizes for capability where it matters most while maintaining cost-effectiveness for routine work.
+
 ## Project Overview
 
 XOE (X over Ethernet) is an extensible framework for encapsulation of various new and legacy protocols into Ethernet-transmissible data. Implements:
@@ -84,7 +108,7 @@ telnet localhost 12345
 4. Create a pull request to merge into `main`
 5. Ensure PR checklist is complete before merging
 
-**Exception**: Documentation-only changes (*.md files only) may be committed directly to `main`.
+**Note**: Repository rules require all changes (including documentation) to go through pull requests. Direct commits to `main` are not allowed.
 
 **Pre-PR Checklist**:
 - [ ] Code builds successfully: `make`
