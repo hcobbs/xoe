@@ -5,6 +5,7 @@
  * This is the entry point state for the FSM.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "core/config.h"
@@ -19,7 +20,7 @@
  * state_init - Initialize configuration with default values
  * @config: Pointer to configuration structure to initialize
  *
- * Returns: STATE_PARSE_ARGS (next state)
+ * Returns: STATE_PARSE_ARGS on success, STATE_CLEANUP on allocation failure
  *
  * Initializes all configuration fields with sensible defaults:
  * - Server mode as default operating mode
@@ -42,9 +43,12 @@ xoe_state_t state_init(xoe_config_t *config) {
     config->use_serial = FALSE;
     config->serial_device = NULL;
     config->serial_config = malloc(sizeof(serial_config_t));
-    if (config->serial_config != NULL) {
-        serial_config_init_defaults((serial_config_t*)config->serial_config);
+    if (config->serial_config == NULL) {
+        fprintf(stderr, "Error: Failed to allocate serial configuration\n");
+        config->exit_code = EXIT_FAILURE;
+        return STATE_CLEANUP;
     }
+    serial_config_init_defaults((serial_config_t*)config->serial_config);
 
 #if TLS_ENABLED
     /* Initialize TLS configuration with default paths */

@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <signal.h>
 
 #include "core/config.h"
 #include "core/server.h"
@@ -22,6 +23,20 @@
 #include "lib/security/tls_context.h"
 #include "lib/security/tls_error.h"
 #endif
+
+/* Global shutdown flag for signal handling */
+static volatile sig_atomic_t g_server_shutdown = 0;
+
+/**
+ * server_signal_handler - Signal handler for graceful shutdown
+ * @signum: Signal number received
+ *
+ * Sets global shutdown flag when SIGINT or SIGTERM is received.
+ */
+static void server_signal_handler(int signum) {
+    (void)signum; /* Unused parameter */
+    g_server_shutdown = 1;
+}
 
 /**
  * state_server_mode - Execute server mode operation
@@ -99,7 +114,7 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
     }
 
     /* Listen for incoming connections */
-    if (listen(server_fd, 10) < 0) {
+    if (listen(server_fd, MAX_PENDING_CONNECTIONS) < 0) {
         perror("listen");
         close(server_fd);
         config->exit_code = EXIT_FAILURE;
@@ -109,12 +124,17 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
     /* Initialize the client pool */
     init_client_pool();
 
+    /* Set up signal handlers for graceful shutdown */
+    signal(SIGINT, server_signal_handler);
+    signal(SIGTERM, server_signal_handler);
+
     printf("Server listening on %s:%d\n",
            (config->listen_address == NULL) ? "0.0.0.0" : config->listen_address,
            config->listen_port);
+    printf("Press Ctrl+C to shutdown gracefully\n");
 
     /* Main accept loop */
-    while (TRUE) {
+    while (!g_server_shutdown) {
         client_info = acquire_client_slot();
         if (client_info == NULL) {
             fprintf(stderr, "Max clients (%d) reached, rejecting connection\n", MAX_CLIENTS);
@@ -145,9 +165,15 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
         pthread_detach(thread_id); /* Detach thread to clean up resources automatically */
     }
 
+    /* Graceful shutdown initiated */
+    printf("\nServer shutting down gracefully...\n");
+
 #if TLS_ENABLED
     /* Cleanup TLS context on shutdown */
-    tls_context_cleanup(g_tls_ctx);
+    if (g_tls_ctx != NULL) {
+        tls_context_cleanup(g_tls_ctx);
+        g_tls_ctx = NULL;
+    }
 #endif
 
     close(server_fd);

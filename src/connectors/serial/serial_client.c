@@ -21,19 +21,40 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdarg.h>
 
-/* Logging macros for consistent error reporting */
-#define LOG_ERROR(fmt, ...) \
-    fprintf(stderr, "[ERROR] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+/* C89-compliant logging - use inline fprintf to avoid variadic macro issues */
+#define LOG_ERROR3(fmt, a1, a2, a3) do { \
+    fprintf(stderr, "[ERROR] %s:%d: " fmt "\n", __FILE__, __LINE__, a1, a2, a3); \
+} while (0)
 
-#define LOG_WARN(fmt, ...) \
-    fprintf(stderr, "[WARN] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#define LOG_ERROR2(fmt, a1, a2) do { \
+    fprintf(stderr, "[ERROR] %s:%d: " fmt "\n", __FILE__, __LINE__, a1, a2); \
+} while (0)
 
-#define LOG_INFO(fmt, ...) \
-    fprintf(stdout, "[INFO] " fmt "\n", ##__VA_ARGS__)
+#define LOG_ERROR1(fmt, a1) do { \
+    fprintf(stderr, "[ERROR] %s:%d: " fmt "\n", __FILE__, __LINE__, a1); \
+} while (0)
 
-#define LOG_DEBUG(fmt, ...) \
-    fprintf(stdout, "[DEBUG] " fmt "\n", ##__VA_ARGS__)
+#define LOG_WARN2(fmt, a1, a2) do { \
+    fprintf(stderr, "[WARN] %s:%d: " fmt "\n", __FILE__, __LINE__, a1, a2); \
+} while (0)
+
+#define LOG_WARN1(fmt, a1) do { \
+    fprintf(stderr, "[WARN] %s:%d: " fmt "\n", __FILE__, __LINE__, a1); \
+} while (0)
+
+#define LOG_INFO1(fmt, a1) do { \
+    fprintf(stdout, "[INFO] " fmt "\n", a1); \
+} while (0)
+
+#define LOG_ERROR_SIMPLE(msg) do { \
+    fprintf(stderr, "[ERROR] %s:%d: %s\n", __FILE__, __LINE__, msg); \
+} while (0)
+
+#define LOG_INFO_SIMPLE(msg) do { \
+    fprintf(stdout, "[INFO] %s\n", msg); \
+} while (0)
 
 /* Internal thread entry points */
 static void* serial_to_net_thread_func(void* arg);
@@ -222,7 +243,7 @@ static void* serial_to_net_thread_func(void* arg)
     int result;
 
     client = (serial_client_t*)arg;
-    LOG_INFO("Serial→Network thread started");
+    LOG_INFO_SIMPLE("Serial→Network thread started");
 
     while (!serial_client_should_shutdown(client)) {
         /* Read from serial port with timeout */
@@ -232,10 +253,10 @@ static void* serial_to_net_thread_func(void* arg)
 
         if (bytes_read < 0) {
             /* Error reading from serial port */
-            LOG_ERROR("Serial read failed: error code %d (errno=%d: %s)",
-                      bytes_read, errno, strerror(errno));
-            LOG_ERROR("Device: %s, Baud: %d",
-                      client->config.device_path, client->config.baud_rate);
+            LOG_ERROR3("Serial read failed: error code %d (errno=%d: %s)",
+                       bytes_read, errno, strerror(errno));
+            LOG_ERROR2("Device: %s, Baud: %d",
+                       client->config.device_path, client->config.baud_rate);
             serial_client_request_shutdown(client);
             break;
         }
@@ -250,36 +271,37 @@ static void* serial_to_net_thread_func(void* arg)
                                               client->tx_sequence, 0,
                                               &packet);
         if (result != 0) {
-            LOG_ERROR("Packet encapsulation failed: error code %d, bytes=%d, seq=%u",
-                      result, bytes_read, client->tx_sequence);
+            LOG_ERROR3("Packet encapsulation failed: error code %d, bytes=%d, seq=%u",
+                       result, bytes_read, client->tx_sequence);
             serial_client_request_shutdown(client);
             break;
         }
 
         client->tx_sequence++;
 
-        /* Send to network socket */
-        bytes_sent = write(client->network_fd, packet.payload->data,
-                           packet.payload->len);
+        /* Send to network socket - store length before freeing payload */
+        {
+            int payload_len = (int)packet.payload->len;
+            bytes_sent = write(client->network_fd, packet.payload->data,
+                               payload_len);
 
-        /* Free packet payload */
-        serial_protocol_free_payload(&packet);
+            /* Free packet payload */
+            serial_protocol_free_payload(&packet);
 
-        if (bytes_sent < 0) {
-            /* Network error */
-            LOG_ERROR("Network write failed: errno=%d: %s",
-                      errno, strerror(errno));
-            serial_client_request_shutdown(client);
-            break;
-        }
+            if (bytes_sent < 0) {
+                /* Network error */
+                LOG_ERROR2("Network write failed: errno=%d: %s", errno, strerror(errno));
+                serial_client_request_shutdown(client);
+                break;
+            }
 
-        if (bytes_sent != (int)packet.payload->len) {
-            LOG_WARN("Partial network write: sent %d of %u bytes",
-                     bytes_sent, packet.payload->len);
+            if (bytes_sent != payload_len) {
+                LOG_WARN2("Partial network write: sent %d of %d bytes", bytes_sent, payload_len);
+            }
         }
     }
 
-    LOG_INFO("Serial→Network thread exiting");
+    LOG_INFO_SIMPLE("Serial→Network thread exiting");
     return NULL;
 }
 
@@ -305,7 +327,7 @@ static void* net_to_serial_thread_func(void* arg)
 
     client = (serial_client_t*)arg;
     memset(&packet, 0, sizeof(packet));
-    LOG_INFO("Network→Serial thread started");
+    LOG_INFO_SIMPLE("Network→Serial thread started");
 
     while (!serial_client_should_shutdown(client)) {
         /* Receive from network */
@@ -317,15 +339,14 @@ static void* net_to_serial_thread_func(void* arg)
                 continue; /* Interrupted, try again */
             }
             /* Network error */
-            LOG_ERROR("Network read failed: errno=%d: %s",
-                      errno, strerror(errno));
+            LOG_ERROR2("Network read failed: errno=%d: %s", errno, strerror(errno));
             serial_client_request_shutdown(client);
             break;
         }
 
         if (bytes_received == 0) {
             /* Connection closed */
-            LOG_INFO("Network connection closed by peer");
+            LOG_INFO_SIMPLE("Network connection closed by peer");
             serial_client_request_shutdown(client);
             break;
         }
@@ -337,7 +358,7 @@ static void* net_to_serial_thread_func(void* arg)
         /* Allocate payload structure */
         packet.payload = (xoe_payload_t*)malloc(sizeof(xoe_payload_t));
         if (packet.payload == NULL) {
-            LOG_ERROR("Memory allocation failed for payload structure");
+            LOG_ERROR_SIMPLE("Memory allocation failed for payload structure");
             serial_client_request_shutdown(client);
             break;
         }
@@ -358,20 +379,19 @@ static void* net_to_serial_thread_func(void* arg)
 
         if (result != 0) {
             /* Decapsulation error, skip packet */
-            LOG_WARN("Packet decapsulation failed: error code %d, bytes=%d",
-                     result, bytes_received);
+            LOG_WARN2("Packet decapsulation failed: error code %d, bytes=%d", result, bytes_received);
             continue;
         }
 
         /* Check for serial errors in flags */
         if (flags & SERIAL_FLAG_PARITY_ERROR) {
-            LOG_WARN("Parity error detected in packet seq=%u", sequence);
+            LOG_WARN1("Parity error detected in packet seq=%u", sequence);
         }
         if (flags & SERIAL_FLAG_FRAMING_ERROR) {
-            LOG_WARN("Framing error detected in packet seq=%u", sequence);
+            LOG_WARN1("Framing error detected in packet seq=%u", sequence);
         }
         if (flags & SERIAL_FLAG_OVERRUN_ERROR) {
-            LOG_WARN("Overrun error detected in packet seq=%u", sequence);
+            LOG_WARN1("Overrun error detected in packet seq=%u", sequence);
         }
 
         client->rx_sequence = sequence;
@@ -382,14 +402,13 @@ static void* net_to_serial_thread_func(void* arg)
 
         if (bytes_written <= 0) {
             /* Buffer closed or error */
-            LOG_ERROR("Buffer write failed: returned %d", bytes_written);
+            LOG_ERROR1("Buffer write failed: returned %d", bytes_written);
             serial_client_request_shutdown(client);
             break;
         }
 
         if ((uint32_t)bytes_written != actual_len) {
-            LOG_WARN("Partial buffer write: wrote %d of %u bytes",
-                     bytes_written, actual_len);
+            LOG_WARN2("Partial buffer write: wrote %d of %u bytes", bytes_written, actual_len);
         }
 
         /* Read from buffer and write to serial port */
@@ -409,20 +428,18 @@ static void* net_to_serial_thread_func(void* arg)
 
             if (bytes_written < 0) {
                 /* Serial write error */
-                LOG_ERROR("Serial write failed: error code %d (errno=%d: %s)",
-                          bytes_written, errno, strerror(errno));
-                LOG_ERROR("Device: %s", client->config.device_path);
+                LOG_ERROR3("Serial write failed: error code %d (errno=%d: %s)", bytes_written, errno, strerror(errno));
+                LOG_ERROR1("Device: %s", client->config.device_path);
                 serial_client_request_shutdown(client);
                 break;
             }
 
             if (bytes_written != bytes_received) {
-                LOG_WARN("Partial serial write: wrote %d of %d bytes",
-                         bytes_written, bytes_received);
+                LOG_WARN2("Partial serial write: wrote %d of %d bytes", bytes_written, bytes_received);
             }
         }
     }
 
-    LOG_INFO("Network→Serial thread exiting");
+    LOG_INFO_SIMPLE("Network→Serial thread exiting");
     return NULL;
 }

@@ -150,10 +150,16 @@ void *handle_client(void *arg) {
                 break;
             }
         } else {
-            send(client_socket, buffer, bytes_received, 0);
+            if (send(client_socket, buffer, bytes_received, 0) < 0) {
+                perror("send failed");
+                break;
+            }
         }
 #else
-        send(client_socket, buffer, bytes_received, 0);
+        if (send(client_socket, buffer, bytes_received, 0) < 0) {
+            perror("send failed");
+            break;
+        }
 #endif
     }
 
