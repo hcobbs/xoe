@@ -10,7 +10,7 @@
 #include "lib/security/tls_session.h"
 #include "lib/security/tls_context.h"
 #include "lib/security/tls_config.h"
-#include "commonDefinitions.h"
+#include "lib/common/definitions.h"
 #include <stdlib.h>
 
 /**
