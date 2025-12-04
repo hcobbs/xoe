@@ -7,7 +7,7 @@
 
 #include "tests/framework/test_framework.h"
 #include "lib/security/tls_error.h"
-#include "commonDefinitions.h"
+#include "lib/common/definitions.h"
 #include <stdlib.h>
 #include <string.h>
 

@@ -93,6 +93,65 @@ test: $(TEST_BINARIES)
 	@echo ""
 	@./scripts/test_integration.sh
 
+# Test build target - compile tests without running them
+.PHONY: test-build
+test-build: $(TEST_BINARIES)
+	@echo "All tests compiled successfully"
+
+# Unit tests only
+.PHONY: test-unit
+test-unit: $(TEST_BINARIES)
+	@echo "=== Running Unit Tests ==="
+	@echo ""
+	@for test in $(TEST_BINARIES); do \
+		$$test || exit 1; \
+		echo ""; \
+	done
+
+# Integration tests only
+.PHONY: test-integration
+test-integration: $(TARGET)
+	@echo "=== Running Integration Tests ==="
+	@echo ""
+	@./scripts/test_integration.sh
+
+# Test with verbose output
+.PHONY: test-verbose
+test-verbose: $(TEST_BINARIES)
+	@echo ""
+	@echo "========================================"
+	@echo " XOE Test Suite"
+	@echo "========================================"
+	@echo ""
+	@echo "--- Unit Tests ---"
+	@for test in $(TEST_BINARIES); do \
+		echo ""; \
+		$$test || exit 1; \
+	done
+	@echo ""
+	@echo "--- Integration Tests ---"
+	@./scripts/test_integration.sh
+	@echo ""
+	@echo "========================================"
+	@echo " All Tests Passed ✓"
+	@echo "========================================"
+
+# Check target - build and test, fail on any error (GNU standard)
+.PHONY: check
+check: all test-build
+	@echo ""
+	@echo "=== Running Unit Tests ==="
+	@echo ""
+	@for test in $(TEST_BINARIES); do \
+		$$test || exit 1; \
+		echo ""; \
+	done
+	@echo "=== Running Integration Tests ==="
+	@echo ""
+	@./scripts/test_integration.sh
+	@echo ""
+	@echo "✓ All checks passed"
+
 # Pattern rule for test binaries
 $(BINDIR)/test_%: $(TESTDIR)/unit/test_%.c $(TEST_FRAMEWORK_OBJ) $(APP_TEST_OBJECTS)
 	@mkdir -p $(@D)

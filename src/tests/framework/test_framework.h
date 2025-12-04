@@ -64,6 +64,77 @@ extern int tests_failed;
     TEST_ASSERT((ptr) == NULL, message)
 
 /**
+ * @brief Assert that two strings are equal
+ *
+ * Requires string.h to be included. Uses strcmp for comparison.
+ *
+ * @param expected Expected string value
+ * @param actual Actual string value
+ * @param message Description of what is being tested
+ */
+#define TEST_ASSERT_STR_EQUAL(expected, actual, message) \
+    TEST_ASSERT(strcmp((expected), (actual)) == 0, message)
+
+/**
+ * @brief Assert that two values are not equal
+ *
+ * @param expected Value that should not match
+ * @param actual Actual value
+ * @param message Description of what is being tested
+ */
+#define TEST_ASSERT_NOT_EQUAL(expected, actual, message) \
+    TEST_ASSERT((expected) != (actual), message)
+
+/**
+ * @brief Assert that a value is greater than a minimum
+ *
+ * @param value Value to check
+ * @param min Minimum threshold (exclusive)
+ * @param message Description of what is being tested
+ */
+#define TEST_ASSERT_GREATER(value, min, message) \
+    TEST_ASSERT((value) > (min), message)
+
+/**
+ * @brief Assert that a value is within a range
+ *
+ * @param value Value to check
+ * @param min Minimum threshold (inclusive)
+ * @param max Maximum threshold (inclusive)
+ * @param message Description of what is being tested
+ */
+#define TEST_ASSERT_RANGE(value, min, max, message) \
+    TEST_ASSERT((value) >= (min) && (value) <= (max), message)
+
+/**
+ * @brief Assert that a return code indicates success
+ *
+ * @param result Return code to check (success >= 0)
+ * @param message Description of what is being tested
+ */
+#define TEST_ASSERT_SUCCESS(result, message) \
+    TEST_ASSERT((result) >= 0, message)
+
+/**
+ * @brief Assert that a return code indicates failure
+ *
+ * @param result Return code to check (failure < 0)
+ * @param message Description of what is being tested
+ */
+#define TEST_ASSERT_FAILURE(result, message) \
+    TEST_ASSERT((result) < 0, message)
+
+/**
+ * @brief Assert that a return code matches a specific error code
+ *
+ * @param result Actual return code
+ * @param error_code Expected error code
+ * @param message Description of what is being tested
+ */
+#define TEST_ASSERT_ERROR(result, error_code, message) \
+    TEST_ASSERT((result) == (error_code), message)
+
+/**
  * @brief Run a test function
  *
  * Prints test name and executes the test function.
