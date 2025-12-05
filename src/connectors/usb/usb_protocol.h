@@ -132,4 +132,21 @@ uint32_t usb_protocol_checksum(
     uint32_t data_len
 );
 
+/**
+ * @brief Free resources allocated for USB packet
+ *
+ * Frees the payload data buffer allocated during encapsulation.
+ * This function should be called after the packet has been transmitted
+ * to prevent memory leaks.
+ *
+ * @param packet Packet whose payload should be freed
+ *
+ * Note: This function does not free the packet structure itself,
+ *       only the payload and its data buffer if owned by the payload.
+ *
+ * Thread safety: This function is thread-safe and may be called
+ *                concurrently from multiple threads on different packets.
+ */
+void usb_protocol_free_payload(xoe_packet_t* packet);
+
 #endif /* USB_PROTOCOL_H */

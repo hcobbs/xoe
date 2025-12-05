@@ -76,6 +76,22 @@ int usb_config_validate(const usb_config_t* config)
         return E_INVALID_ARGUMENT;
     }
 
+    /* Validate endpoint directions (USB spec: bit 7 set = IN, clear = OUT) */
+    if (config->bulk_in_endpoint != USB_NO_ENDPOINT &&
+        (config->bulk_in_endpoint & 0x80) == 0) {
+        return E_INVALID_ARGUMENT;  /* IN endpoint must have bit 7 set */
+    }
+
+    if (config->bulk_out_endpoint != USB_NO_ENDPOINT &&
+        (config->bulk_out_endpoint & 0x80) != 0) {
+        return E_INVALID_ARGUMENT;  /* OUT endpoint must NOT have bit 7 set */
+    }
+
+    if (config->interrupt_in_endpoint != USB_NO_ENDPOINT &&
+        (config->interrupt_in_endpoint & 0x80) == 0) {
+        return E_INVALID_ARGUMENT;  /* IN endpoint must have bit 7 set */
+    }
+
     /* Timeout must be positive */
     if (config->transfer_timeout_ms <= 0) {
         return E_INVALID_ARGUMENT;

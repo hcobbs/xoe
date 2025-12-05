@@ -59,6 +59,21 @@ ifeq ($(UNAME_S),Darwin) # macOS
         LIBS += -lusb-1.0
     endif
 endif
+ifeq ($(UNAME_S),FreeBSD)
+    LIBS += -lpthread -lssl -lcrypto -lusb
+    INCLUDES += -I/usr/local/include
+    LIBS += -L/usr/local/lib
+endif
+ifeq ($(UNAME_S),OpenBSD)
+    LIBS += -lpthread -lssl -lcrypto -lusb-1.0
+    INCLUDES += -I/usr/local/include
+    LIBS += -L/usr/local/lib
+endif
+ifeq ($(UNAME_S),NetBSD)
+    LIBS += -lpthread -lssl -lcrypto -lusb-1.0
+    INCLUDES += -I/usr/pkg/include
+    LIBS += -L/usr/pkg/lib
+endif
 
 # Default target
 .PHONY: all

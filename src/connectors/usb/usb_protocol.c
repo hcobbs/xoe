@@ -4,6 +4,9 @@
  * Implements USB Request Block (URB) encapsulation and decapsulation
  * for transmission over the XOE network protocol.
  *
+ * Network byte order (big-endian) is used for all multi-byte fields
+ * to ensure cross-platform compatibility.
+ *
  * Author: [LLM-ARCH]
  * Date: 2025-12-05
  */
@@ -12,6 +15,96 @@
 #include "lib/common/definitions.h"
 #include <stdlib.h>
 #include <string.h>
+
+/*
+ * Byte order conversion helpers
+ * Network protocols use big-endian (network byte order)
+ */
+
+static void write_uint16_be(uint8_t* buffer, uint16_t value)
+{
+    buffer[0] = (uint8_t)(value >> 8);
+    buffer[1] = (uint8_t)(value);
+}
+
+static void write_uint32_be(uint8_t* buffer, uint32_t value)
+{
+    buffer[0] = (uint8_t)(value >> 24);
+    buffer[1] = (uint8_t)(value >> 16);
+    buffer[2] = (uint8_t)(value >> 8);
+    buffer[3] = (uint8_t)(value);
+}
+
+static void write_int32_be(uint8_t* buffer, int32_t value)
+{
+    write_uint32_be(buffer, (uint32_t)value);
+}
+
+static uint16_t read_uint16_be(const uint8_t* buffer)
+{
+    return ((uint16_t)buffer[0] << 8) | buffer[1];
+}
+
+static uint32_t read_uint32_be(const uint8_t* buffer)
+{
+    return ((uint32_t)buffer[0] << 24) |
+           ((uint32_t)buffer[1] << 16) |
+           ((uint32_t)buffer[2] << 8) |
+           buffer[3];
+}
+
+static int32_t read_int32_be(const uint8_t* buffer)
+{
+    return (int32_t)read_uint32_be(buffer);
+}
+
+/**
+ * @brief Serialize URB header to network byte order
+ *
+ * Converts all multi-byte fields to big-endian for network transmission.
+ */
+static void serialize_urb_header(uint8_t* buffer, const usb_urb_header_t* header)
+{
+    int i;
+
+    write_uint16_be(buffer + 0, header->command);
+    write_uint16_be(buffer + 2, header->flags);
+    write_uint32_be(buffer + 4, header->seqnum);
+    write_uint32_be(buffer + 8, header->device_id);
+    buffer[12] = header->endpoint;
+    buffer[13] = header->transfer_type;
+    write_uint16_be(buffer + 14, header->reserved);
+    write_uint32_be(buffer + 16, header->transfer_length);
+    write_uint32_be(buffer + 20, header->actual_length);
+    write_int32_be(buffer + 24, header->status);
+    for (i = 0; i < 8; i++) {
+        buffer[28 + i] = header->setup[i];
+    }
+}
+
+/**
+ * @brief Deserialize URB header from network byte order
+ *
+ * Converts all multi-byte fields from big-endian to host byte order.
+ */
+static void deserialize_urb_header(usb_urb_header_t* header, const uint8_t* buffer)
+{
+    int i;
+
+    header->command = read_uint16_be(buffer + 0);
+    header->flags = read_uint16_be(buffer + 2);
+    header->seqnum = read_uint32_be(buffer + 4);
+    header->device_id = read_uint32_be(buffer + 8);
+    header->endpoint = buffer[12];
+    header->transfer_type = buffer[13];
+    header->reserved = read_uint16_be(buffer + 14);
+    header->transfer_length = read_uint32_be(buffer + 16);
+    header->actual_length = read_uint32_be(buffer + 20);
+    header->status = read_int32_be(buffer + 24);
+    for (i = 0; i < 8; i++) {
+        header->setup[i] = buffer[28 + i];
+    }
+}
 
 /**
  * @brief Calculate checksum over URB header and data
@@ -92,8 +185,8 @@ int usb_protocol_encapsulate(
         return E_OUT_OF_MEMORY;
     }
 
-    /* Copy URB header to payload buffer */
-    memcpy(payload_buffer, urb_header, sizeof(usb_urb_header_t));
+    /* Serialize URB header to network byte order */
+    serialize_urb_header(payload_buffer, urb_header);
 
     /* Copy transfer data if present */
     if (transfer_data != NULL && data_len > 0) {
@@ -173,11 +266,22 @@ int usb_protocol_decapsulate(
     /* Extract payload buffer */
     payload_buffer = (const uint8_t*)packet->payload->data;
 
-    /* Copy URB header */
-    memcpy(urb_header, payload_buffer, sizeof(usb_urb_header_t));
+    /* Deserialize URB header from network byte order */
+    deserialize_urb_header(urb_header, payload_buffer);
 
     /* Calculate data length */
     payload_data_len = packet->payload->len - sizeof(usb_urb_header_t);
+
+    /* Verify checksum BEFORE copying data (use original packet data) */
+    calculated_checksum = usb_protocol_checksum(
+        urb_header,
+        payload_data_len > 0 ? (payload_buffer + sizeof(usb_urb_header_t)) : NULL,
+        payload_data_len
+    );
+
+    if (calculated_checksum != packet->checksum) {
+        return E_CHECKSUM_MISMATCH;
+    }
 
     /* Copy transfer data if present and buffer provided */
     if (payload_data_len > 0 && transfer_data != NULL) {
@@ -194,16 +298,30 @@ int usb_protocol_decapsulate(
     /* Set actual data length */
     *data_len = payload_data_len;
 
-    /* Verify checksum */
-    calculated_checksum = usb_protocol_checksum(
-        urb_header,
-        payload_data_len > 0 ? transfer_data : NULL,
-        payload_data_len
-    );
+    return 0;
+}
 
-    if (calculated_checksum != packet->checksum) {
-        return E_CHECKSUM_MISMATCH;
+/**
+ * @brief Free resources allocated for USB packet
+ *
+ * Cleans up memory allocated during encapsulation. This function
+ * safely handles NULL pointers and respects the owns_data flag.
+ */
+void usb_protocol_free_payload(xoe_packet_t* packet)
+{
+    if (packet == NULL) {
+        return;
     }
 
-    return 0;
+    if (packet->payload != NULL) {
+        /* Free data buffer if owned by payload */
+        if (packet->payload->owns_data && packet->payload->data != NULL) {
+            free(packet->payload->data);
+            packet->payload->data = NULL;
+        }
+
+        /* Free payload structure */
+        free(packet->payload);
+        packet->payload = NULL;
+    }
 }
