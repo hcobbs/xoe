@@ -42,6 +42,7 @@
 /* Maximum payload sizes */
 #define USB_MAX_PAYLOAD_SIZE    4096    /* URB header + data */
 #define USB_MAX_DATA_SIZE       4048    /* Max transfer data */
+#define USB_MAX_TRANSFER_SIZE   4048    /* Max bytes per transfer (alias) */
 
 /**
  * @brief USB URB (USB Request Block) header structure

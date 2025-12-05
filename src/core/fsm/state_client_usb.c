@@ -9,7 +9,7 @@
  * - Testing or using this connector can cause unexpected results
  * - People with domain knowledge are welcome to critique
  *
- * Phase 3 Implementation: Client integration with basic connectivity
+ * Phase 4 Implementation: Active USB transfers with threading
  */
 
 #include <stdio.h>
@@ -44,16 +44,19 @@ static void signal_handler(int signum)
  *
  * Returns: STATE_CLEANUP
  *
- * Phase 3 Implementation:
+ * Phase 4 Implementation:
  * - USB client initialization
  * - Device opening and management
  * - Network connection establishment
- * - Basic connectivity testing
+ * - Active USB transfer threads (USB→Network data flow)
+ * - Network receive thread (Network→USB routing)
+ * - Multi-threaded architecture for concurrent device handling
  *
  * Future Phases:
- * - Full USB transfer implementation (Phase 4)
- * - Device manager for multi-device routing (Phase 4)
- * - Hotplug support (Phase 5)
+ * - Full bidirectional transfer coordination (Phase 5)
+ * - Request/response matching and routing
+ * - Device manager for advanced multi-device scenarios
+ * - Hotplug support (Phase 6)
  */
 xoe_state_t state_client_usb(xoe_config_t *config) {
     usb_multi_config_t *usb_multi = NULL;
@@ -190,13 +193,12 @@ xoe_state_t state_client_usb(xoe_config_t *config) {
     g_usb_client = NULL;
 
     printf("\n");
-    printf("Phase 3 Status: Client connected and managed devices successfully\n");
+    printf("Phase 4 Status: USB client with active transfers completed\n");
     printf("\n");
-    printf("NOTE: Full transfer implementation will be added in Phase 4\n");
-    printf("      This includes:\n");
-    printf("      - Active USB data transfers\n");
-    printf("      - Network packet routing\n");
-    printf("      - Multi-device coordination\n");
+    printf("NOTE: Advanced features will be added in future phases:\n");
+    printf("      - Bidirectional request/response coordination (Phase 5)\n");
+    printf("      - Advanced multi-device routing and management\n");
+    printf("      - Hotplug device detection and handling (Phase 6)\n");
     printf("\n");
 
     config->exit_code = EXIT_SUCCESS;
