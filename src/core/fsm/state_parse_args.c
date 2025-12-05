@@ -23,6 +23,7 @@
 #include "connectors/usb/usb_device.h"
 
 #if TLS_ENABLED
+#include "lib/security/tls_config.h"
 #include "lib/security/tls_context.h"
 #endif
 

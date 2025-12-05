@@ -71,6 +71,32 @@ stop_server() {
     fi
 }
 
+# Run command with timeout (macOS compatible)
+run_with_timeout() {
+    local timeout=$1
+    shift
+
+    # Run command in background
+    "$@" &
+    local pid=$!
+
+    # Wait with timeout (check every 0.5 seconds)
+    local elapsed=0
+    while [ $elapsed -lt $timeout ]; do
+        if ! kill -0 $pid 2>/dev/null; then
+            wait $pid 2>/dev/null
+            return $?
+        fi
+        sleep 0.5
+        elapsed=$((elapsed + 1))
+    done
+
+    # Timeout - kill the process
+    kill $pid 2>/dev/null || true
+    wait $pid 2>/dev/null || true
+    return 124  # Timeout exit code
+}
+
 # Cleanup on exit
 cleanup() {
     stop_server
@@ -137,8 +163,8 @@ if [ -z "$SKIP_TLS" ]; then
     echo -n "Test 2: TLS 1.3 mode (-e tls13)... "
 
     if start_server -e tls13 -p $PORT; then
-        echo "test" | openssl s_client -connect localhost:$PORT -tls1_3 \
-            -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1
+        # Use timeout wrapper for openssl (which can hang)
+        run_with_timeout 30 sh -c "echo 'test' | openssl s_client -connect localhost:$PORT -tls1_3 -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1"
         print_result $?
     else
         print_result 1
@@ -157,8 +183,8 @@ if [ -z "$SKIP_TLS" ]; then
     echo -n "Test 3: TLS 1.2 mode (-e tls12)... "
 
     if start_server -e tls12 -p $PORT; then
-        echo "test" | openssl s_client -connect localhost:$PORT -tls1_2 \
-            -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1
+        # Use timeout wrapper for openssl (which can hang)
+        run_with_timeout 30 sh -c "echo 'test' | openssl s_client -connect localhost:$PORT -tls1_2 -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1"
         print_result $?
     else
         print_result 1
@@ -178,8 +204,8 @@ if [ -z "$SKIP_TLS" ]; then
 
     if start_server -e tls13 -p $PORT; then
         # This should fail because server enforces TLS 1.3 only
-        echo "test" | openssl s_client -connect localhost:$PORT -tls1_2 \
-            -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1
+        # Use timeout wrapper for openssl (which can hang)
+        run_with_timeout 30 sh -c "echo 'test' | openssl s_client -connect localhost:$PORT -tls1_2 -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1"
 
         # Invert result - we WANT this to fail
         if [ $? -ne 0 ]; then
@@ -204,8 +230,8 @@ if [ -z "$SKIP_TLS" ]; then
     echo -n "Test 5: Custom certificate path (-cert/-key)... "
 
     if start_server -e tls13 -p $PORT -cert $CERT_DIR/server.crt -key $CERT_DIR/server.key; then
-        echo "test" | openssl s_client -connect localhost:$PORT -tls1_3 \
-            -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1
+        # Use timeout wrapper for openssl (which can hang)
+        run_with_timeout 30 sh -c "echo 'test' | openssl s_client -connect localhost:$PORT -tls1_3 -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1"
         print_result $?
     else
         print_result 1
@@ -249,10 +275,9 @@ if [ -z "$SKIP_TLS" ]; then
     echo -n "Test 7: Concurrent connections (10 clients, TLS 1.3)... "
 
     if start_server -e tls13 -p $PORT; then
-        # Launch 10 concurrent TLS connections
+        # Launch 10 concurrent TLS connections with timeout
         for i in {1..10}; do
-            echo "Client $i" | openssl s_client -connect localhost:$PORT -tls1_3 \
-                -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1 &
+            run_with_timeout 30 sh -c "echo 'Client $i' | openssl s_client -connect localhost:$PORT -tls1_3 -CAfile $CERT_DIR/server.crt -quiet > /dev/null 2>&1" &
         done
 
         # Wait for all connections to complete

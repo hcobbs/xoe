@@ -2,7 +2,7 @@
 
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -g -std=c89 -pedantic
+CFLAGS = -Wall -Wextra -g -std=c89 -pedantic -DTLS_ENABLED=1
 
 # Directories
 SRCDIR   = src
