@@ -36,7 +36,7 @@ LIBS =
 UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Linux)
-    LIBS += -lpthread -lssl -lcrypto
+    LIBS += -lpthread -lssl -lcrypto -lusb-1.0
 endif
 ifeq ($(UNAME_S),Darwin) # macOS
     LIBS += -lpthread
@@ -49,6 +49,14 @@ ifeq ($(UNAME_S),Darwin) # macOS
     else
         # Fall back to system LibreSSL
         LIBS += -lssl -lcrypto
+    endif
+    # Add libusb-1.0 (usually from Homebrew)
+    HOMEBREW_LIBUSB := $(shell brew --prefix libusb 2>/dev/null)
+    ifneq ($(HOMEBREW_LIBUSB),)
+        INCLUDES += -I$(HOMEBREW_LIBUSB)/include/libusb-1.0
+        LIBS += -L$(HOMEBREW_LIBUSB)/lib -lusb-1.0
+    else
+        LIBS += -lusb-1.0
     endif
 endif
 

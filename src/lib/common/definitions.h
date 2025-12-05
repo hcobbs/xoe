@@ -25,4 +25,22 @@
 #define E_TLS_CIPHER_MISMATCH  -15
 #define E_TLS_PROTOCOL_ERROR   -16
 
+/* General protocol error (serial, USB, etc.) */
+#define E_PROTOCOL_ERROR       -17
+#define E_CHECKSUM_MISMATCH    -18
+#define E_NOT_FOUND            -19
+
+/* USB-specific Error Definitions (start at -100) */
+#define E_USB_NOT_FOUND        -100  /* USB device not found */
+#define E_USB_ACCESS_DENIED    -101  /* Permission denied */
+#define E_USB_BUSY             -102  /* Device or resource busy */
+#define E_USB_NO_DEVICE        -103  /* Device disconnected */
+#define E_USB_NOT_SUPPORTED    -104  /* Operation not supported */
+#define E_USB_PIPE_ERROR       -105  /* Pipe/endpoint error */
+#define E_USB_OVERFLOW         -106  /* Buffer overflow */
+#define E_USB_TIMEOUT          -107  /* Transfer timeout */
+#define E_USB_CANCELLED        -108  /* Transfer cancelled */
+#define E_USB_STALL            -109  /* Endpoint stalled */
+#define E_USB_PROTOCOL_ERROR   -110  /* Protocol error */
+
 #endif /* COMMON_DEFINITIONS_H */
