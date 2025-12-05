@@ -23,8 +23,10 @@
  * Include libusb-1.0 headers
  * Note: libusb-1.0 is a modern library, so we may encounter some
  * compatibility issues that need to be addressed during implementation
+ *
+ * The Makefile adds the include path, so we can include directly
  */
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 
 /*
  * Restore inline definition for any code that follows
