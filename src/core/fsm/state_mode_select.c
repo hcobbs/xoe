@@ -15,15 +15,17 @@
  *
  * Returns: Appropriate state based on operating mode
  *   - STATE_CLEANUP if mode is MODE_HELP
+ *   - STATE_CLIENT_USB if client mode with USB enabled
  *   - STATE_CLIENT_SERIAL if client mode with serial enabled
- *   - STATE_CLIENT_STD if client mode without serial
+ *   - STATE_CLIENT_STD if client mode without serial or USB
  *   - STATE_SERVER_MODE for server mode (default)
  *
  * Mode selection logic:
  * 1. If help mode was set during arg parsing, cleanup and exit
  * 2. If connect_server_ip is set, operate as client
- *    a. If serial enabled, use serial bridge mode
- *    b. Otherwise, use standard client mode
+ *    a. If USB enabled, use USB bridge mode
+ *    b. If serial enabled, use serial bridge mode
+ *    c. Otherwise, use standard client mode
  * 3. Default to server mode
  */
 xoe_state_t state_mode_select(xoe_config_t *config) {
@@ -34,8 +36,11 @@ xoe_state_t state_mode_select(xoe_config_t *config) {
 
     /* Determine mode based on configuration */
     if (config->connect_server_ip != NULL) {
-        /* Client mode */
-        if (config->use_serial == TRUE) {
+        /* Client mode - check for USB, serial, or standard */
+        if (config->use_usb == TRUE) {
+            config->mode = MODE_CLIENT_USB;
+            return STATE_CLIENT_USB;
+        } else if (config->use_serial == TRUE) {
             config->mode = MODE_CLIENT_SERIAL;
             return STATE_CLIENT_SERIAL;
         } else {

@@ -19,6 +19,8 @@
 #include "core/config.h"
 #include "lib/common/definitions.h"
 #include "connectors/serial/serial_config.h"
+#include "connectors/usb/usb_config.h"
+#include "connectors/usb/usb_device.h"
 
 #if TLS_ENABLED
 #include "lib/security/tls_context.h"
@@ -48,7 +50,7 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
     config->program_name = argv[0];
 
     /* Phase 1: Parse short options with getopt */
-    while ((opt = getopt(argc, argv, "i:p:c:e:s:b:h")) != -1) {
+    while ((opt = getopt(argc, argv, "i:p:c:e:s:b:u:h")) != -1) {
         switch (opt) {
             case 'i':
                 config->listen_address = optarg;
@@ -121,6 +123,53 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
                     }
                 }
                 break;
+
+            case 'u': {
+                /* Parse VID:PID format (hex values) */
+                usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
+                unsigned int vid = 0, pid = 0;
+
+                if (usb_multi == NULL) {
+                    fprintf(stderr, "Error: USB configuration not initialized\n");
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+
+                /* Check if we have room for another device */
+                if (usb_multi->device_count >= usb_multi->max_devices) {
+                    fprintf(stderr, "Error: Maximum number of USB devices (%d) exceeded\n",
+                            usb_multi->max_devices);
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+
+                /* Parse VID:PID (format: 0xVVVV:0xPPPP or VVVV:PPPP) */
+                if (sscanf(optarg, "%x:%x", &vid, &pid) != 2) {
+                    fprintf(stderr, "Invalid USB device format: %s\n", optarg);
+                    fprintf(stderr, "Expected format: VID:PID (hex, e.g., 046d:c52b)\n");
+                    print_usage(config->program_name);
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+
+                /* Validate VID/PID ranges */
+                if (vid == 0 || vid > 0xFFFF || pid == 0 || pid > 0xFFFF) {
+                    fprintf(stderr, "Invalid VID:PID values: %04x:%04x\n", vid, pid);
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+
+                /* Initialize new device slot with defaults */
+                usb_config_init_defaults(&usb_multi->devices[usb_multi->device_count]);
+                usb_multi->devices[usb_multi->device_count].vendor_id = (uint16_t)vid;
+                usb_multi->devices[usb_multi->device_count].product_id = (uint16_t)pid;
+
+                /* Increment device count */
+                usb_multi->device_count++;
+
+                config->use_usb = TRUE;
+                break;
+            }
 
             case 'h':
                 print_usage(config->program_name);
@@ -236,6 +285,124 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
                 }
             }
             optind += 2;
+        } else if (strcmp(argv[optind], "--interface") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option --interface requires an argument\n");
+                print_usage(config->program_name);
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
+            }
+            /* Apply to most recently added USB device */
+            {
+                usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
+                int interface_num = atoi(argv[optind + 1]);
+                if (usb_multi != NULL && usb_multi->device_count > 0) {
+                    usb_multi->devices[usb_multi->device_count - 1].interface_number = interface_num;
+                } else {
+                    fprintf(stderr, "Error: --interface must follow -u option\n");
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+            }
+            optind += 2;
+        } else if (strcmp(argv[optind], "--ep-in") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option --ep-in requires an argument\n");
+                print_usage(config->program_name);
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
+            }
+            /* Apply to most recently added USB device */
+            {
+                usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
+                unsigned int ep_addr = 0;
+                if (sscanf(argv[optind + 1], "%x", &ep_addr) != 1 || ep_addr > 0xFF) {
+                    fprintf(stderr, "Invalid endpoint address: %s (use hex, e.g., 81)\n",
+                            argv[optind + 1]);
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+                if (usb_multi != NULL && usb_multi->device_count > 0) {
+                    usb_multi->devices[usb_multi->device_count - 1].bulk_in_endpoint =
+                        (uint8_t)ep_addr;
+                } else {
+                    fprintf(stderr, "Error: --ep-in must follow -u option\n");
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+            }
+            optind += 2;
+        } else if (strcmp(argv[optind], "--ep-out") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option --ep-out requires an argument\n");
+                print_usage(config->program_name);
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
+            }
+            /* Apply to most recently added USB device */
+            {
+                usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
+                unsigned int ep_addr = 0;
+                if (sscanf(argv[optind + 1], "%x", &ep_addr) != 1 || ep_addr > 0xFF) {
+                    fprintf(stderr, "Invalid endpoint address: %s (use hex, e.g., 01)\n",
+                            argv[optind + 1]);
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+                if (usb_multi != NULL && usb_multi->device_count > 0) {
+                    usb_multi->devices[usb_multi->device_count - 1].bulk_out_endpoint =
+                        (uint8_t)ep_addr;
+                } else {
+                    fprintf(stderr, "Error: --ep-out must follow -u option\n");
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+            }
+            optind += 2;
+        } else if (strcmp(argv[optind], "--ep-int") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option --ep-int requires an argument\n");
+                print_usage(config->program_name);
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
+            }
+            /* Apply to most recently added USB device */
+            {
+                usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
+                unsigned int ep_addr = 0;
+                if (sscanf(argv[optind + 1], "%x", &ep_addr) != 1 || ep_addr > 0xFF) {
+                    fprintf(stderr, "Invalid endpoint address: %s (use hex, e.g., 83)\n",
+                            argv[optind + 1]);
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+                if (usb_multi != NULL && usb_multi->device_count > 0) {
+                    usb_multi->devices[usb_multi->device_count - 1].interrupt_in_endpoint =
+                        (uint8_t)ep_addr;
+                } else {
+                    fprintf(stderr, "Error: --ep-int must follow -u option\n");
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+            }
+            optind += 2;
+        } else if (strcmp(argv[optind], "--list-usb") == 0) {
+            /* List USB devices and exit */
+            {
+                struct libusb_context* ctx = NULL;
+                int result = usb_device_init_library(&ctx);
+                if (result != 0) {
+                    fprintf(stderr, "Error: Failed to initialize libusb (error %d)\n", result);
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
+                printf("\nConnected USB Devices:\n");
+                printf("======================\n");
+                usb_device_enumerate(ctx);
+                usb_device_cleanup_library(ctx);
+            }
+            config->exit_code = EXIT_SUCCESS;
+            return STATE_CLEANUP;
         } else {
             fprintf(stderr, "Unknown option: %s\n", argv[optind]);
             print_usage(config->program_name);

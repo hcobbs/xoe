@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include "core/config.h"
+#include "connectors/usb/usb_config.h"
 
 #if TLS_ENABLED
 #include "core/server.h"
@@ -37,6 +38,12 @@ xoe_state_t state_cleanup(xoe_config_t *config) {
     if (config->serial_config != NULL) {
         free(config->serial_config);
         config->serial_config = NULL;
+    }
+
+    /* Free dynamically allocated USB configuration */
+    if (config->usb_config != NULL) {
+        usb_multi_config_free((usb_multi_config_t*)config->usb_config);
+        config->usb_config = NULL;
     }
 
 #if TLS_ENABLED
