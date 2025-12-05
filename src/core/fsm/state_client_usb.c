@@ -9,43 +9,61 @@
  * - Testing or using this connector can cause unexpected results
  * - People with domain knowledge are welcome to critique
  *
- * This is a Phase 1 stub implementation. Full USB transfer implementation
- * will be added in Phase 2.
+ * Phase 3 Implementation: Client integration with basic connectivity
  */
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <signal.h>
 #include "core/config.h"
 #include "lib/common/definitions.h"
 #include "connectors/usb/usb_config.h"
 #include "connectors/usb/usb_device.h"
+#include "connectors/usb/usb_client.h"
+
+/* Global client pointer for signal handler */
+static usb_client_t* g_usb_client = NULL;
 
 /**
- * state_client_usb - USB client mode handler (Phase 1 stub)
+ * @brief Signal handler for graceful shutdown
+ */
+static void signal_handler(int signum)
+{
+    (void)signum;  /* Unused parameter */
+
+    printf("\nReceived shutdown signal...\n");
+
+    if (g_usb_client != NULL) {
+        usb_client_stop(g_usb_client);
+    }
+}
+
+/**
+ * state_client_usb - USB client mode handler
  * @config: Pointer to configuration structure
  *
- * Returns: STATE_CLEANUP (stub implementation)
+ * Returns: STATE_CLEANUP
  *
- * Phase 1 Implementation:
- * This is a minimal stub that validates the USB configuration and
- * provides basic error reporting. Full USB transfer implementation
- * will be added in Phase 2.
+ * Phase 3 Implementation:
+ * - USB client initialization
+ * - Device opening and management
+ * - Network connection establishment
+ * - Basic connectivity testing
  *
- * Planned Phase 2 Features:
- * - USB device initialization and opening
- * - Multi-threaded USB transfer handling
- * - Network packet encapsulation/decapsulation
- * - Device manager for multi-device support
- * - Hotplug support
+ * Future Phases:
+ * - Full USB transfer implementation (Phase 4)
+ * - Device manager for multi-device routing (Phase 4)
+ * - Hotplug support (Phase 5)
  */
 xoe_state_t state_client_usb(xoe_config_t *config) {
     usb_multi_config_t *usb_multi = NULL;
+    usb_client_t *client = NULL;
     int i = 0;
+    int result = 0;
 
     /* Validate config pointer */
     if (config == NULL) {
         fprintf(stderr, "Error: NULL configuration pointer\n");
-        config->exit_code = EXIT_FAILURE;
         return STATE_CLEANUP;
     }
 
@@ -73,7 +91,7 @@ xoe_state_t state_client_usb(xoe_config_t *config) {
         return STATE_CLEANUP;
     }
 
-    /* Display configured devices */
+    /* Display header */
     printf("\n");
     printf("========================================\n");
     printf(" XOE USB Client Mode (EXPERIMENTAL)\n");
@@ -86,9 +104,9 @@ xoe_state_t state_client_usb(xoe_config_t *config) {
     printf("Configured USB Devices: %d\n", usb_multi->device_count);
     printf("\n");
 
+    /* Display and validate device configurations */
     for (i = 0; i < usb_multi->device_count; i++) {
         usb_config_t *dev_cfg = &usb_multi->devices[i];
-        int result = 0;
 
         printf("Device %d:\n", i + 1);
         printf("  VID:PID: %04x:%04x\n", dev_cfg->vendor_id, dev_cfg->product_id);
@@ -118,17 +136,67 @@ xoe_state_t state_client_usb(xoe_config_t *config) {
         printf("\n");
     }
 
-    /* Phase 1 stub: Print status and exit */
     printf("========================================\n");
     printf("\n");
-    printf("Phase 1 Status: Configuration validated successfully\n");
+
+    /* Initialize USB client */
+    printf("Initializing USB client...\n");
+    client = usb_client_init(config->connect_server_ip,
+                             config->connect_server_port,
+                             usb_multi->max_devices);
+    if (client == NULL) {
+        fprintf(stderr, "Error: Failed to initialize USB client\n");
+        config->exit_code = EXIT_FAILURE;
+        return STATE_CLEANUP;
+    }
+
+    /* Add devices to client */
+    printf("Adding USB devices...\n");
+    for (i = 0; i < usb_multi->device_count; i++) {
+        result = usb_client_add_device(client, &usb_multi->devices[i]);
+        if (result != 0) {
+            fprintf(stderr, "Error: Failed to add device %d (error %d)\n",
+                    i + 1, result);
+            usb_client_cleanup(client);
+            config->exit_code = EXIT_FAILURE;
+            return STATE_CLEANUP;
+        }
+    }
+
+    /* Set up signal handler for graceful shutdown */
+    g_usb_client = client;
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+
+    /* Start client operation */
+    printf("\nStarting USB client...\n");
+    result = usb_client_start(client);
+    if (result != 0) {
+        fprintf(stderr, "Error: Failed to start USB client (error %d)\n", result);
+        usb_client_cleanup(client);
+        g_usb_client = NULL;
+        config->exit_code = EXIT_FAILURE;
+        return STATE_CLEANUP;
+    }
+
+    /* Wait for shutdown */
+    usb_client_wait(client);
+
+    /* Print statistics */
+    usb_client_print_stats(client);
+
+    /* Cleanup */
+    usb_client_cleanup(client);
+    g_usb_client = NULL;
+
     printf("\n");
-    printf("NOTE: Full USB transfer implementation will be added in Phase 2\n");
+    printf("Phase 3 Status: Client connected and managed devices successfully\n");
+    printf("\n");
+    printf("NOTE: Full transfer implementation will be added in Phase 4\n");
     printf("      This includes:\n");
-    printf("      - USB device initialization and opening\n");
-    printf("      - Multi-threaded transfer handling\n");
-    printf("      - Network packet encapsulation\n");
-    printf("      - Device manager for multi-device support\n");
+    printf("      - Active USB data transfers\n");
+    printf("      - Network packet routing\n");
+    printf("      - Multi-device coordination\n");
     printf("\n");
 
     config->exit_code = EXIT_SUCCESS;
