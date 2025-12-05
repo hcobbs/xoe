@@ -29,6 +29,11 @@
 #define E_PROTOCOL_ERROR       -17
 #define E_CHECKSUM_MISMATCH    -18
 #define E_NOT_FOUND            -19
+#define E_IO_ERROR             -20  /* I/O error */
+#define E_DEVICE_BUSY          -21  /* Device busy */
+#define E_INTERRUPTED          -22  /* Operation interrupted */
+#define E_NOT_SUPPORTED        -23  /* Operation not supported */
+#define E_USB_TRANSFER_ERROR   -24  /* Generic USB transfer error */
 
 /* USB-specific Error Definitions (start at -100) */
 #define E_USB_NOT_FOUND        -100  /* USB device not found */
