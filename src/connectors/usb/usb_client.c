@@ -237,6 +237,36 @@ int usb_client_start(usb_client_t* client)
         return result;
     }
 
+    /* Register all devices with server */
+    {
+        int i;
+        printf("\nRegistering USB devices with server...\n");
+        for (i = 0; i < client->device_count; i++) {
+            uint32_t device_id;
+
+            /* Construct device_id from VID:PID */
+            device_id = ((uint32_t)client->devices[i].config.vendor_id << 16) |
+                        client->devices[i].config.product_id;
+
+            printf("  Registering device %d: VID:PID %04x:%04x (device_id=0x%08x)\n",
+                   i + 1,
+                   client->devices[i].config.vendor_id,
+                   client->devices[i].config.product_id,
+                   device_id);
+
+            result = usb_client_register_device(client, device_id, 5000);
+            if (result != 0) {
+                fprintf(stderr, "Failed to register device %d: error %d\n",
+                        i + 1, result);
+                fprintf(stderr, "Closing server connection\n");
+                close(client->socket_fd);
+                client->socket_fd = -1;
+                return result;
+            }
+        }
+        printf("All devices registered successfully\n\n");
+    }
+
     /* Mark as running */
     pthread_mutex_lock(&client->lock);
 
