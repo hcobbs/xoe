@@ -87,6 +87,9 @@ void init_client_pool(void) {
     for (i = 0; i < MAX_CLIENTS; i++) {
         client_pool[i].in_use = 0;
         client_pool[i].client_socket = -1;
+#if TLS_ENABLED
+        client_pool[i].tls_session = NULL;
+#endif
     }
 }
 
@@ -213,12 +216,118 @@ cleanup:
     if (tls != NULL) {
         tls_session_shutdown(tls);
         tls_session_destroy(tls);
+        /* Only shutdown socket if TLS was successful */
+        shutdown(client_socket, SHUT_RDWR);
     }
 #endif
 
     close(client_socket);
     release_client_slot(client_info);
     pthread_exit(NULL);
+}
+
+/**
+ * disconnect_all_clients - Close all active client connections
+ *
+ * Closes sockets for all clients currently in the pool. Threads will
+ * exit when they detect the closed socket.
+ */
+void disconnect_all_clients(void) {
+    int i;
+    int disconnected = 0;
+
+    pthread_mutex_lock(&pool_mutex);
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        if (client_pool[i].in_use && client_pool[i].client_socket != -1) {
+#if TLS_ENABLED
+            /* Clean up TLS session if present */
+            if (client_pool[i].tls_session != NULL) {
+                tls_session_shutdown(client_pool[i].tls_session);
+                tls_session_destroy(client_pool[i].tls_session);
+                client_pool[i].tls_session = NULL;
+            }
+#endif
+            /* Close the socket (will cause thread to exit) */
+            close(client_pool[i].client_socket);
+            client_pool[i].client_socket = -1;
+            disconnected++;
+        }
+    }
+    pthread_mutex_unlock(&pool_mutex);
+
+    if (disconnected > 0) {
+        printf("Disconnected %d client(s)\n", disconnected);
+    }
+}
+
+/**
+ * wait_for_clients - Wait for all client threads to exit
+ * @timeout_sec: Maximum seconds to wait
+ *
+ * Returns: Number of clients still active after timeout
+ */
+int wait_for_clients(int timeout_sec) {
+    int elapsed = 0;
+    int active = 0;
+    int i;
+
+    while (elapsed < timeout_sec) {
+        active = 0;
+
+        pthread_mutex_lock(&pool_mutex);
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            if (client_pool[i].in_use) {
+                active++;
+            }
+        }
+        pthread_mutex_unlock(&pool_mutex);
+
+        if (active == 0) {
+            return 0;  /* All clients exited */
+        }
+
+        sleep(1);
+        elapsed++;
+    }
+
+    /* Timeout reached, force clear any remaining slots */
+    if (active > 0) {
+        printf("Warning: %d client(s) still active after %d second timeout, force-clearing\n",
+               active, timeout_sec);
+        pthread_mutex_lock(&pool_mutex);
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            if (client_pool[i].in_use) {
+                client_pool[i].in_use = 0;
+                client_pool[i].client_socket = -1;
+#if TLS_ENABLED
+                client_pool[i].tls_session = NULL;
+#endif
+            }
+        }
+        pthread_mutex_unlock(&pool_mutex);
+    }
+
+    return active;
+}
+
+/**
+ * get_active_client_count - Get count of currently active clients
+ *
+ * Returns: Number of client slots currently in use
+ */
+int get_active_client_count(void) {
+    int count = 0;
+    int i;
+
+    pthread_mutex_lock(&pool_mutex);
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        if (client_pool[i].in_use) {
+            count++;
+        }
+    }
+    pthread_mutex_unlock(&pool_mutex);
+
+    return count;
 }
 
 /**

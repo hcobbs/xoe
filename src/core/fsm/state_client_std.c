@@ -15,6 +15,13 @@
 #include "core/config.h"
 #include "lib/common/definitions.h"
 
+#if TLS_ENABLED
+#include "lib/security/tls_config.h"
+#include "lib/security/tls_context.h"
+#include "lib/security/tls_session.h"
+#include "lib/security/tls_io.h"
+#endif
+
 /**
  * state_client_std - Execute standard client mode
  * @config: Pointer to configuration structure
@@ -37,6 +44,10 @@ xoe_state_t state_client_std(xoe_config_t *config) {
     struct sockaddr_in serv_addr;
     char buffer[BUFFER_SIZE] = {0};
     int bytes_received = 0;
+#if TLS_ENABLED
+    SSL_CTX* tls_ctx = NULL;
+    SSL* tls = NULL;
+#endif
 
     /* Create socket */
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -65,6 +76,33 @@ xoe_state_t state_client_std(xoe_config_t *config) {
         return STATE_CLEANUP;
     }
 
+#if TLS_ENABLED
+    /* Initialize TLS if encryption is enabled */
+    if (config->encryption_mode == ENCRYPT_TLS12 || config->encryption_mode == ENCRYPT_TLS13) {
+        tls_ctx = tls_context_init_client(config->encryption_mode);
+        if (tls_ctx == NULL) {
+            fprintf(stderr, "Failed to initialize TLS client context\n");
+            close(sock);
+            config->exit_code = EXIT_FAILURE;
+            return STATE_CLEANUP;
+        }
+
+        tls = tls_session_create_client(tls_ctx, sock);
+        if (tls == NULL) {
+            struct linger linger_opt;
+            fprintf(stderr, "TLS handshake failed\n");
+            tls_context_cleanup(tls_ctx);
+            /* Set SO_LINGER to 0 to avoid blocking on close() after failed handshake */
+            linger_opt.l_onoff = 1;
+            linger_opt.l_linger = 0;
+            setsockopt(sock, SOL_SOCKET, SO_LINGER, &linger_opt, sizeof(linger_opt));
+            close(sock);
+            config->exit_code = EXIT_FAILURE;
+            return STATE_CLEANUP;
+        }
+    }
+#endif
+
     printf("Connected to server %s:%d\n",
            config->connect_server_ip, config->connect_server_port);
     printf("Enter messages to send (type 'exit' to quit):\n");
@@ -83,26 +121,68 @@ xoe_state_t state_client_std(xoe_config_t *config) {
             break;
         }
 
-        /* Send message to server */
-        send(sock, buffer, strlen(buffer), 0);
+#if TLS_ENABLED
+        if (tls != NULL) {
+            /* Send via TLS */
+            if (tls_write(tls, buffer, strlen(buffer)) <= 0) {
+                fprintf(stderr, "TLS send failed\n");
+                config->exit_code = EXIT_FAILURE;
+                break;
+            }
 
-        /* Receive response */
-        bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
-        if (bytes_received > 0) {
-            buffer[bytes_received] = '\0';
-            printf("Server response: %s\n", buffer);
-        } else if (bytes_received == 0) {
-            printf("Server disconnected.\n");
-            break;
-        } else {
-            perror("recv failed");
-            break;
+            /* Receive via TLS */
+            bytes_received = tls_read(tls, buffer, BUFFER_SIZE - 1);
+            if (bytes_received > 0) {
+                buffer[bytes_received] = '\0';
+                printf("Server response: %s\n", buffer);
+            } else if (bytes_received == 0) {
+                printf("Server disconnected.\n");
+                config->exit_code = EXIT_FAILURE;
+                break;
+            } else {
+                fprintf(stderr, "TLS recv failed\n");
+                config->exit_code = EXIT_FAILURE;
+                break;
+            }
+        } else
+#endif
+        {
+            /* Send message to server (plain TCP) */
+            send(sock, buffer, strlen(buffer), 0);
+
+            /* Receive response (plain TCP) */
+            bytes_received = recv(sock, buffer, BUFFER_SIZE - 1, 0);
+            if (bytes_received > 0) {
+                buffer[bytes_received] = '\0';
+                printf("Server response: %s\n", buffer);
+            } else if (bytes_received == 0) {
+                printf("Server disconnected.\n");
+                break;
+            } else {
+                perror("recv failed");
+                config->exit_code = EXIT_FAILURE;
+                break;
+            }
         }
     }
+
+#if TLS_ENABLED
+    /* Cleanup TLS */
+    if (tls != NULL) {
+        tls_session_shutdown(tls);
+        tls_session_destroy(tls);
+    }
+    if (tls_ctx != NULL) {
+        tls_context_cleanup(tls_ctx);
+    }
+#endif
 
     close(sock);
     printf("Client disconnected.\n");
 
-    config->exit_code = EXIT_SUCCESS;
+    /* Only set SUCCESS if we haven't already set FAILURE */
+    if (config->exit_code != EXIT_FAILURE) {
+        config->exit_code = EXIT_SUCCESS;
+    }
     return STATE_CLEANUP;
 }

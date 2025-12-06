@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include "core/config.h"
+#include "core/mgmt/mgmt_server.h"
+#include "core/mgmt/mgmt_config.h"
 #include "connectors/usb/usb_config.h"
 
 #if TLS_ENABLED
@@ -44,6 +46,18 @@ xoe_state_t state_cleanup(xoe_config_t *config) {
     if (config->usb_config != NULL) {
         usb_multi_config_free((usb_multi_config_t*)config->usb_config);
         config->usb_config = NULL;
+    }
+
+    /* Shutdown management server if running */
+    if (config->mgmt_server != NULL) {
+        mgmt_server_stop((mgmt_server_t*)config->mgmt_server);
+        config->mgmt_server = NULL;
+    }
+
+    /* Cleanup config manager if allocated */
+    if (g_config_manager != NULL) {
+        mgmt_config_destroy(g_config_manager);
+        g_config_manager = NULL;
     }
 
 #if TLS_ENABLED

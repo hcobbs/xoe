@@ -31,6 +31,13 @@
 /* TLS 1.3 cipher suites (TLSv1.3 ciphersuites parameter) */
 #define TLS_CIPHER_SUITES "TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256"
 
+/* TLS 1.2 cipher list (strong ciphers only with forward secrecy) */
+/* Prioritizes ECDHE for forward secrecy, AES-GCM and ChaCha20 for AEAD */
+/* Excludes: anonymous auth, export ciphers, DES, RC4, MD5, PSK */
+#define TLS_CIPHER_LIST "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:" \
+                        "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:" \
+                        "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256"
+
 /* Client Certificate Verification Mode */
 #define TLS_VERIFY_NONE   0  /* No client certificate verification */
 #define TLS_VERIFY_PEER   1  /* Request and verify client certificate */

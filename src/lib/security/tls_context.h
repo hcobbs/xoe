@@ -60,6 +60,25 @@ SSL_CTX* tls_context_init(const char* cert_file, const char* key_file, int tls_v
 int tls_context_configure(SSL_CTX* ctx, int tls_version);
 
 /**
+ * @brief Initialize a TLS context for client mode
+ *
+ * Creates and configures an SSL_CTX for TLS client operation.
+ * Configures TLS version according to tls_version parameter.
+ * Does NOT require certificates (client mode).
+ *
+ * Must be called before initiating TLS connections to servers.
+ * The returned context is read-only and thread-safe after initialization.
+ *
+ * @param tls_version TLS version to use (ENCRYPT_TLS12 or ENCRYPT_TLS13)
+ * @return SSL_CTX* on success, NULL on failure
+ *
+ * Error codes (check tls_get_last_error()):
+ *   E_INVALID_ARGUMENT - Invalid version
+ *   E_UNKNOWN_ERROR    - OpenSSL initialization failed
+ */
+SSL_CTX* tls_context_init_client(int tls_version);
+
+/**
  * @brief Clean up the global TLS context
  *
  * Frees all resources associated with the SSL_CTX.

@@ -89,10 +89,21 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
 #endif
 
     /* Create socket file descriptor */
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("socket failed");
         config->exit_code = EXIT_FAILURE;
         return STATE_CLEANUP;
+    }
+
+    /* Enable SO_REUSEADDR to allow rapid restart (avoids TIME_WAIT issues) */
+    {
+        int opt = 1;
+        if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+            perror("setsockopt SO_REUSEADDR failed");
+            close(server_fd);
+            config->exit_code = EXIT_FAILURE;
+            return STATE_CLEANUP;
+        }
     }
 
     /* Set up address structure */

@@ -65,6 +65,11 @@ xoe_state_t state_init(xoe_config_t *config) {
     /* Initialize connection file descriptor */
     config->server_fd = -1;
 
+    /* Initialize management interface configuration */
+    config->mgmt_port = MGMT_PORT;  /* Default port 6969 */
+    config->mgmt_password = NULL;    /* No authentication by default */
+    config->mgmt_server = NULL;      /* Management server not started yet */
+
 #if TLS_ENABLED
     /* Initialize TLS configuration with default paths */
     config->encryption_mode = ENCRYPT_NONE;
