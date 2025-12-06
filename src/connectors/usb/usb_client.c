@@ -4,7 +4,7 @@
  * Implements USB client coordinator for managing USB devices
  * over network connection.
  *
- * EXPERIMENTAL FEATURE - Phase 4 Implementation
+ * EXPERIMENTAL FEATURE - Phase 5 Implementation
  *
  * Author: [LLM-ARCH]
  * Date: 2025-12-05
@@ -16,14 +16,31 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
-#ifndef _WIN32
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#endif
+#include <sys/time.h>
+
+
+/* ========================================================================
+ * Internal Helper Functions
+ * ======================================================================== */
+
+/**
+ * @brief Get current time in milliseconds
+ *
+ * @return Current time in milliseconds since epoch
+ */
+static unsigned long get_time_ms(void)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (unsigned long)((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+}
 
 /* ========================================================================
  * Client Lifecycle Functions
@@ -87,26 +104,21 @@ usb_client_t* usb_client_init(const char* server_ip,
     client->shutdown_requested = FALSE;
 
     /* Initialize thread synchronization */
-#ifdef _WIN32
-    InitializeCriticalSection(&client->lock);
-    client->shutdown_event = CreateEvent(NULL, TRUE, FALSE, NULL);
-    if (client->shutdown_event == NULL) {
-        free(client->transfer_threads);
-        free(client->devices);
-        free(client->server_ip);
-        DeleteCriticalSection(&client->lock);
-        free(client);
-        return NULL;
-    }
-#else
     pthread_mutex_init(&client->lock, NULL);
     pthread_cond_init(&client->shutdown_cond, NULL);
-#endif
 
     /* Initialize statistics */
     client->packets_sent = 0;
     client->packets_received = 0;
     client->transfer_errors = 0;
+
+    /* Phase 5: Initialize request/response tracking */
+    client->next_seqnum = 1;
+    client->pending_head = NULL;
+    client->pending_count = 0;
+    client->timeouts = 0;
+
+    pthread_mutex_init(&client->pending_lock, NULL);
 
     return client;
 }
@@ -226,20 +238,12 @@ int usb_client_start(usb_client_t* client)
     }
 
     /* Mark as running */
-#ifdef _WIN32
-    EnterCriticalSection(&client->lock);
-#else
     pthread_mutex_lock(&client->lock);
-#endif
 
     client->running = TRUE;
     client->shutdown_requested = FALSE;
 
-#ifdef _WIN32
-    LeaveCriticalSection(&client->lock);
-#else
     pthread_mutex_unlock(&client->lock);
-#endif
 
     /* Phase 4: Spawn worker threads for active USB transfers */
     printf("\nStarting USB client threads...\n");
@@ -248,23 +252,6 @@ int usb_client_start(usb_client_t* client)
     printf("\n");
 
     /* Spawn network receive thread */
-#ifdef _WIN32
-    client->network_thread = CreateThread(
-        NULL,
-        0,
-        usb_client_network_thread,
-        client,
-        0,
-        NULL
-    );
-    if (client->network_thread == NULL) {
-        fprintf(stderr, "Failed to create network thread\n");
-        client->running = FALSE;
-        close(client->socket_fd);
-        client->socket_fd = -1;
-        return E_IO_ERROR;
-    }
-#else
     result = pthread_create(&client->network_thread, NULL,
                            usb_client_network_thread, client);
     if (result != 0) {
@@ -275,7 +262,6 @@ int usb_client_start(usb_client_t* client)
         client->socket_fd = -1;
         return E_IO_ERROR;
     }
-#endif
 
     printf("Network receive thread spawned\n");
 
@@ -300,22 +286,6 @@ int usb_client_start(usb_client_t* client)
             ctx->device_index = i;
 
             /* Spawn thread */
-#ifdef _WIN32
-            client->transfer_threads[i] = CreateThread(
-                NULL,
-                0,
-                usb_client_transfer_thread,
-                ctx,
-                0,
-                NULL
-            );
-            if (client->transfer_threads[i] == NULL) {
-                fprintf(stderr, "Failed to create transfer thread for device %d\n",
-                        i + 1);
-                free(ctx);
-                continue;
-            }
-#else
             result = pthread_create(&client->transfer_threads[i], NULL,
                                    usb_client_transfer_thread, ctx);
             if (result != 0) {
@@ -324,7 +294,6 @@ int usb_client_start(usb_client_t* client)
                 free(ctx);
                 continue;
             }
-#endif
 
             printf("Transfer thread spawned for device %d (VID:PID %04x:%04x)\n",
                    i + 1, client->devices[i].config.vendor_id,
@@ -346,16 +315,34 @@ int usb_client_wait(usb_client_t* client)
         return E_INVALID_ARGUMENT;
     }
 
-    /* Phase 3 Stub: Just wait for shutdown signal */
-#ifdef _WIN32
-    WaitForSingleObject(client->shutdown_event, INFINITE);
-#else
+    /* Phase 5: Wait for shutdown with periodic timeout cleanup */
     pthread_mutex_lock(&client->lock);
     while (!client->shutdown_requested) {
-        pthread_cond_wait(&client->shutdown_cond, &client->lock);
+        struct timespec timeout;
+        struct timeval now;
+        int wait_result;
+
+        /* Wait for 1 second or until shutdown */
+        gettimeofday(&now, NULL);
+        timeout.tv_sec = now.tv_sec + 1;
+        timeout.tv_nsec = now.tv_usec * 1000;
+
+        wait_result = pthread_cond_timedwait(&client->shutdown_cond,
+                                             &client->lock,
+                                             &timeout);
+
+        /* Unlock to allow cleanup to acquire pending_lock */
+        pthread_mutex_unlock(&client->lock);
+
+        /* Clean up timed-out requests */
+        usb_client_cleanup_timeouts(client);
+
+        /* Reacquire lock for next iteration */
+        pthread_mutex_lock(&client->lock);
+
+        (void)wait_result;  /* Suppress unused variable warning */
     }
     pthread_mutex_unlock(&client->lock);
-#endif
 
     return 0;
 }
@@ -374,38 +361,21 @@ int usb_client_stop(usb_client_t* client)
     printf("\nStopping USB client...\n");
 
     /* Signal shutdown */
-#ifdef _WIN32
-    EnterCriticalSection(&client->lock);
-#else
     pthread_mutex_lock(&client->lock);
-#endif
 
     client->shutdown_requested = TRUE;
     client->running = FALSE;
 
-#ifdef _WIN32
-    SetEvent(client->shutdown_event);
-    LeaveCriticalSection(&client->lock);
-#else
     pthread_cond_broadcast(&client->shutdown_cond);
     pthread_mutex_unlock(&client->lock);
-#endif
 
     /* Phase 4: Wait for transfer threads to exit */
     printf("Waiting for transfer threads to exit...\n");
     for (i = 0; i < client->device_count; i++) {
-#ifdef _WIN32
-        if (client->transfer_threads[i] != NULL) {
-            WaitForSingleObject(client->transfer_threads[i], INFINITE);
-            CloseHandle(client->transfer_threads[i]);
-            client->transfer_threads[i] = NULL;
-        }
-#else
         if (client->transfer_threads[i] != 0) {
             pthread_join(client->transfer_threads[i], NULL);
             client->transfer_threads[i] = 0;
         }
-#endif
     }
 
     /* Close network connection (this will cause network thread to exit) */
@@ -416,18 +386,10 @@ int usb_client_stop(usb_client_t* client)
 
     /* Wait for network thread to exit */
     printf("Waiting for network thread to exit...\n");
-#ifdef _WIN32
-    if (client->network_thread != NULL) {
-        WaitForSingleObject(client->network_thread, INFINITE);
-        CloseHandle(client->network_thread);
-        client->network_thread = NULL;
-    }
-#else
     if (client->network_thread != 0) {
         pthread_join(client->network_thread, NULL);
         client->network_thread = 0;
     }
-#endif
 
     printf("All threads stopped\n");
     return 0;
@@ -464,16 +426,23 @@ void usb_client_cleanup(usb_client_t* client)
         free(client->server_ip);
     }
 
-    /* Destroy synchronization primitives */
-#ifdef _WIN32
-    if (client->shutdown_event != NULL) {
-        CloseHandle(client->shutdown_event);
+    /* Phase 5: Clean up any remaining pending requests */
+    {
+        usb_pending_request_t* req = client->pending_head;
+        usb_pending_request_t* next;
+        while (req != NULL) {
+            next = req->next;
+            pthread_mutex_destroy(&req->mutex);
+            pthread_cond_destroy(&req->cond);
+            free(req);
+            req = next;
+        }
     }
-    DeleteCriticalSection(&client->lock);
-#else
+
+    /* Destroy synchronization primitives */
     pthread_mutex_destroy(&client->lock);
     pthread_cond_destroy(&client->shutdown_cond);
-#endif
+    pthread_mutex_destroy(&client->pending_lock);
 
     /* Free client structure */
     free(client);
@@ -520,19 +489,11 @@ int usb_client_send_urb(usb_client_t* client,
     }
 
     /* Update statistics */
-#ifdef _WIN32
-    EnterCriticalSection(&client->lock);
-#else
     pthread_mutex_lock(&client->lock);
-#endif
 
     client->packets_sent++;
 
-#ifdef _WIN32
-    LeaveCriticalSection(&client->lock);
-#else
     pthread_mutex_unlock(&client->lock);
-#endif
 
     return 0;
 }
@@ -579,19 +540,11 @@ int usb_client_receive_urb(usb_client_t* client,
     }
 
     /* Update statistics */
-#ifdef _WIN32
-    EnterCriticalSection(&client->lock);
-#else
     pthread_mutex_lock(&client->lock);
-#endif
 
     client->packets_received++;
 
-#ifdef _WIN32
-    LeaveCriticalSection(&client->lock);
-#else
     pthread_mutex_unlock(&client->lock);
-#endif
 
     return 0;
 }
@@ -606,11 +559,7 @@ int usb_client_receive_urb(usb_client_t* client,
  * Continuously receives URBs from server and dispatches them to
  * appropriate device handlers.
  */
-#ifdef _WIN32
-DWORD WINAPI usb_client_network_thread(LPVOID arg)
-#else
 void* usb_client_network_thread(void* arg)
-#endif
 {
     usb_client_t* client = (usb_client_t*)arg;
     usb_urb_header_t urb_header;
@@ -623,15 +572,9 @@ void* usb_client_network_thread(void* arg)
 
     while (1) {
         /* Check if shutdown requested */
-#ifdef _WIN32
-        EnterCriticalSection(&client->lock);
-        running = client->running;
-        LeaveCriticalSection(&client->lock);
-#else
         pthread_mutex_lock(&client->lock);
         running = client->running;
         pthread_mutex_unlock(&client->lock);
-#endif
 
         if (!running) {
             break;
@@ -651,22 +594,33 @@ void* usb_client_network_thread(void* arg)
             break;  /* Fatal error, exit thread */
         }
 
-        /* Phase 4 Stub: Dispatch URB to appropriate device handler
-         * In future phases, this will route responses back to waiting
-         * transfer contexts based on device_id and sequence number */
-        printf("Received URB: device_id=0x%08x, endpoint=0x%02x, "
-               "status=%d, actual_length=%u\n",
-               urb_header.device_id, urb_header.endpoint,
-               urb_header.status, urb_header.actual_length);
+        /* Phase 5: Route response to pending request */
+        result = usb_client_complete_pending_request(
+            client,
+            urb_header.seqnum,
+            data_buffer,
+            urb_header.actual_length,
+            urb_header.status
+        );
+
+        if (result == E_NOT_FOUND) {
+            /* No pending request found - may be unsolicited data or timeout */
+            printf("Warning: Received URB with no matching request "
+                   "(seqnum=%u, device_id=0x%08x, endpoint=0x%02x)\n",
+                   urb_header.seqnum, urb_header.device_id, urb_header.endpoint);
+        } else if (result != 0) {
+            fprintf(stderr, "Error completing pending request: %d\n", result);
+        }
+
+        /* Update statistics */
+        pthread_mutex_lock(&client->lock);
+        client->packets_received++;
+        pthread_mutex_unlock(&client->lock);
     }
 
     printf("Network receive thread exiting\n");
 
-#ifdef _WIN32
-    return 0;
-#else
     return NULL;
-#endif
 }
 
 /**
@@ -675,11 +629,7 @@ void* usb_client_network_thread(void* arg)
  * Handles USB transfers for a single device, reading from USB
  * and sending to network.
  */
-#ifdef _WIN32
-DWORD WINAPI usb_client_transfer_thread(LPVOID arg)
-#else
 void* usb_client_transfer_thread(void* arg)
-#endif
 {
     usb_transfer_thread_ctx_t* ctx = (usb_transfer_thread_ctx_t*)arg;
     usb_client_t* client;
@@ -691,11 +641,7 @@ void* usb_client_transfer_thread(void* arg)
     usb_urb_header_t urb_header;
 
     if (ctx == NULL) {
-#ifdef _WIN32
-        return 1;
-#else
         return NULL;
-#endif
     }
 
     client = ctx->client;
@@ -711,24 +657,14 @@ void* usb_client_transfer_thread(void* arg)
         fprintf(stderr, "Failed to allocate transfer context for device %d\n",
                 ctx->device_index + 1);
         free(ctx);
-#ifdef _WIN32
-        return 1;
-#else
         return NULL;
-#endif
     }
 
     while (1) {
         /* Check if shutdown requested */
-#ifdef _WIN32
-        EnterCriticalSection(&client->lock);
-        running = client->running;
-        LeaveCriticalSection(&client->lock);
-#else
         pthread_mutex_lock(&client->lock);
         running = client->running;
         pthread_mutex_unlock(&client->lock);
-#endif
 
         if (!running) {
             break;
@@ -765,17 +701,9 @@ void* usb_client_transfer_thread(void* arg)
                         ctx->device_index + 1, result);
 
                 /* Update error statistics */
-#ifdef _WIN32
-                EnterCriticalSection(&client->lock);
-#else
                 pthread_mutex_lock(&client->lock);
-#endif
                 client->transfer_errors++;
-#ifdef _WIN32
-                LeaveCriticalSection(&client->lock);
-#else
                 pthread_mutex_unlock(&client->lock);
-#endif
 
                 continue;  /* Non-fatal error, retry */
             }
@@ -804,11 +732,7 @@ void* usb_client_transfer_thread(void* arg)
                    ctx->device_index + 1, transferred);
         } else {
             /* No IN endpoint configured, sleep briefly */
-#ifdef _WIN32
-            Sleep(100);
-#else
             usleep(100000);  /* 100ms */
-#endif
         }
     }
 
@@ -818,11 +742,7 @@ void* usb_client_transfer_thread(void* arg)
 
     printf("Transfer thread exiting for device %d\n", ctx->device_index + 1);
 
-#ifdef _WIN32
-    return 0;
-#else
     return NULL;
-#endif
 }
 
 /* ========================================================================
@@ -845,6 +765,8 @@ void usb_client_print_stats(const usb_client_t* client)
     printf("Packets sent:     %lu\n", client->packets_sent);
     printf("Packets received: %lu\n", client->packets_received);
     printf("Transfer errors:  %lu\n", client->transfer_errors);
+    printf("Pending requests: %lu\n", client->pending_count);
+    printf("Timeouts:         %lu\n", client->timeouts);
     printf("Running:          %s\n", client->running ? "Yes" : "No");
     printf("========================================\n\n");
 }
@@ -860,15 +782,285 @@ int usb_client_is_running(const usb_client_t* client)
         return FALSE;
     }
 
-#ifdef _WIN32
-    EnterCriticalSection((CRITICAL_SECTION*)&client->lock);
-    running = client->running;
-    LeaveCriticalSection((CRITICAL_SECTION*)&client->lock);
-#else
     pthread_mutex_lock((pthread_mutex_t*)&client->lock);
     running = client->running;
     pthread_mutex_unlock((pthread_mutex_t*)&client->lock);
-#endif
 
     return running;
+}
+
+/* ========================================================================
+ * Phase 5: Request/Response Tracking Functions
+ * ======================================================================== */
+
+/**
+ * @brief Allocate sequence number for new request
+ */
+uint32_t usb_client_alloc_seqnum(usb_client_t* client)
+{
+    uint32_t seqnum;
+
+    if (client == NULL) {
+        return 0;
+    }
+
+    pthread_mutex_lock(&client->pending_lock);
+    seqnum = client->next_seqnum++;
+    pthread_mutex_unlock(&client->pending_lock);
+
+    return seqnum;
+}
+
+/**
+ * @brief Create and enqueue pending request
+ */
+usb_pending_request_t* usb_client_create_pending_request(
+    usb_client_t* client,
+    uint32_t seqnum,
+    uint32_t device_id,
+    uint8_t endpoint,
+    void* response_buffer,
+    uint32_t response_size,
+    unsigned int timeout_ms
+)
+{
+    usb_pending_request_t* request;
+
+    /* Validate parameters */
+    if (client == NULL) {
+        return NULL;
+    }
+
+    /* Allocate request structure */
+    request = (usb_pending_request_t*)malloc(sizeof(usb_pending_request_t));
+    if (request == NULL) {
+        return NULL;
+    }
+
+    /* Initialize request fields */
+    memset(request, 0, sizeof(usb_pending_request_t));
+    request->seqnum = seqnum;
+    request->device_id = device_id;
+    request->endpoint = endpoint;
+    request->response_data = response_buffer;
+    request->response_size = response_size;
+    request->response_received = 0;
+    request->status = 0;
+    request->completed = FALSE;
+    request->timestamp_ms = get_time_ms();
+    request->timeout_ms = timeout_ms;
+    request->next = NULL;
+
+    /* Initialize synchronization */
+    pthread_mutex_init(&request->mutex, NULL);
+    pthread_cond_init(&request->cond, NULL);
+
+    /* Add to pending queue */
+    pthread_mutex_lock(&client->pending_lock);
+
+    request->next = client->pending_head;
+    client->pending_head = request;
+    client->pending_count++;
+
+    pthread_mutex_unlock(&client->pending_lock);
+
+    return request;
+}
+
+/**
+ * @brief Wait for pending request completion
+ */
+int usb_client_wait_pending_request(
+    usb_client_t* client,
+    usb_pending_request_t* request
+)
+{
+    int result = 0;
+
+    /* Validate parameters */
+    if (client == NULL || request == NULL) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Wait with timeout using condition variable */
+    {
+        struct timespec abs_timeout;
+        struct timeval now;
+        unsigned long timeout_ms = request->timeout_ms;
+
+        gettimeofday(&now, NULL);
+        abs_timeout.tv_sec = now.tv_sec + (timeout_ms / 1000);
+        abs_timeout.tv_nsec = (now.tv_usec * 1000) +
+                             ((timeout_ms % 1000) * 1000000);
+
+        /* Handle nanosecond overflow */
+        if (abs_timeout.tv_nsec >= 1000000000) {
+            abs_timeout.tv_sec++;
+            abs_timeout.tv_nsec -= 1000000000;
+        }
+
+        pthread_mutex_lock(&request->mutex);
+        while (!request->completed && result == 0) {
+            int wait_result = pthread_cond_timedwait(&request->cond,
+                                                     &request->mutex,
+                                                     &abs_timeout);
+            if (wait_result == ETIMEDOUT) {
+                result = E_TIMEOUT;
+            } else if (wait_result != 0) {
+                result = E_IO_ERROR;
+            }
+        }
+        pthread_mutex_unlock(&request->mutex);
+    }
+
+    return result;
+}
+
+/**
+ * @brief Complete pending request with response data
+ */
+int usb_client_complete_pending_request(
+    usb_client_t* client,
+    uint32_t seqnum,
+    const void* data,
+    uint32_t data_len,
+    int32_t status
+)
+{
+    usb_pending_request_t* request;
+    int found = FALSE;
+
+    /* Validate parameters */
+    if (client == NULL) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Find request in pending queue */
+    pthread_mutex_lock(&client->pending_lock);
+
+    request = client->pending_head;
+    while (request != NULL) {
+        if (request->seqnum == seqnum) {
+            found = TRUE;
+            break;
+        }
+        request = request->next;
+    }
+
+    pthread_mutex_unlock(&client->pending_lock);
+
+    if (!found) {
+        return E_NOT_FOUND;
+    }
+
+    /* Copy response data */
+    pthread_mutex_lock(&request->mutex);
+
+    if (data != NULL && data_len > 0 && request->response_data != NULL) {
+        uint32_t copy_len = (data_len < request->response_size) ?
+                           data_len : request->response_size;
+        memcpy(request->response_data, data, copy_len);
+        request->response_received = copy_len;
+    }
+    request->status = status;
+    request->completed = TRUE;
+
+    /* Signal condition variable */
+    pthread_cond_signal(&request->cond);
+    pthread_mutex_unlock(&request->mutex);
+
+    return 0;
+}
+
+/**
+ * @brief Free pending request
+ */
+void usb_client_free_pending_request(
+    usb_client_t* client,
+    usb_pending_request_t* request
+)
+{
+    usb_pending_request_t* prev;
+    usb_pending_request_t* curr;
+
+    if (client == NULL || request == NULL) {
+        return;
+    }
+
+    /* Remove from pending queue */
+    pthread_mutex_lock(&client->pending_lock);
+
+    prev = NULL;
+    curr = client->pending_head;
+    while (curr != NULL) {
+        if (curr == request) {
+            if (prev == NULL) {
+                client->pending_head = curr->next;
+            } else {
+                prev->next = curr->next;
+            }
+            client->pending_count--;
+            break;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+
+    pthread_mutex_unlock(&client->pending_lock);
+
+    /* Destroy synchronization primitives */
+    pthread_mutex_destroy(&request->mutex);
+    pthread_cond_destroy(&request->cond);
+
+    /* Free request structure */
+    free(request);
+}
+
+/**
+ * @brief Clean up timed-out requests
+ */
+int usb_client_cleanup_timeouts(usb_client_t* client)
+{
+    usb_pending_request_t* request;
+    usb_pending_request_t* next;
+    usb_pending_request_t* prev;
+    unsigned long current_time;
+    int timeout_count = 0;
+
+    if (client == NULL) {
+        return 0;
+    }
+
+    current_time = get_time_ms();
+
+    /* Scan pending queue for timeouts */
+    pthread_mutex_lock(&client->pending_lock);
+
+    prev = NULL;
+    request = client->pending_head;
+    while (request != NULL) {
+        next = request->next;
+
+        /* Check if request has timed out */
+        if (!request->completed &&
+            (current_time - request->timestamp_ms) >= request->timeout_ms) {
+
+            /* Mark as timed out and signal waiting thread */
+            pthread_mutex_lock(&request->mutex);
+            request->completed = TRUE;
+            request->status = E_TIMEOUT;
+            pthread_cond_signal(&request->cond);
+            pthread_mutex_unlock(&request->mutex);
+
+            timeout_count++;
+            client->timeouts++;
+        }
+
+        prev = request;
+        request = next;
+    }
+
+    pthread_mutex_unlock(&client->pending_lock);
+
+    return timeout_count;
 }
