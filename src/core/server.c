@@ -28,6 +28,10 @@
 #include "lib/security/tls_error.h"
 #endif
 
+/* USB server includes */
+#include "connectors/usb/usb_server.h"
+#include "lib/protocol/protocol.h"
+
 /* Global fixed-size client pool */
 static client_info_t client_pool[MAX_CLIENTS];
 static pthread_mutex_t pool_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -36,6 +40,9 @@ static pthread_mutex_t pool_mutex = PTHREAD_MUTEX_INITIALIZER;
 #if TLS_ENABLED
 SSL_CTX* g_tls_ctx = NULL;
 #endif
+
+/* Global USB server (NULL if not initialized) */
+usb_server_t* g_usb_server = NULL;
 
 /**
  * acquire_client_slot - Acquire a client slot from the pool
@@ -97,7 +104,6 @@ void *handle_client(void *arg) {
     client_info_t *client_info = (client_info_t *)arg;
     int client_socket = client_info->client_socket;
     struct sockaddr_in client_addr = client_info->client_addr;
-    char buffer[BUFFER_SIZE];
     char client_ip[INET_ADDRSTRLEN];
     int bytes_received;
 
@@ -125,42 +131,62 @@ void *handle_client(void *arg) {
     }
 #endif
 
-    /* Echo loop - use TLS or plain TCP based on runtime mode */
+    /* Protocol handling loop - detect and route based on protocol */
     while (1) {
+        xoe_packet_t packet;
+
 #if TLS_ENABLED
         if (tls != NULL) {
-            bytes_received = tls_read(tls, buffer, BUFFER_SIZE - 1);
+            bytes_received = tls_read(tls, (char*)&packet, sizeof(xoe_packet_t));
         } else {
-            bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+            bytes_received = recv(client_socket, &packet, sizeof(xoe_packet_t), 0);
         }
 #else
-        bytes_received = recv(client_socket, buffer, BUFFER_SIZE - 1, 0);
+        bytes_received = recv(client_socket, &packet, sizeof(xoe_packet_t), 0);
 #endif
         if (bytes_received <= 0) {
             break;
         }
 
-        buffer[bytes_received] = '\0';
-        printf("Received from %s:%d: %s", client_ip, ntohs(client_addr.sin_port), buffer);
+        /* Check if this is a USB protocol packet */
+        if (bytes_received == sizeof(xoe_packet_t) &&
+            packet.protocol_id == XOE_PROTOCOL_USB) {
 
-#if TLS_ENABLED
-        if (tls != NULL) {
-            if (tls_write(tls, buffer, bytes_received) <= 0) {
-                fprintf(stderr, "TLS write failed\n");
-                break;
+            /* Route via USB server if available */
+            if (g_usb_server != NULL) {
+                int result = usb_server_handle_urb(g_usb_server, &packet,
+                                                   client_socket);
+                if (result != 0) {
+                    fprintf(stderr, "USB routing error from %s:%d: %d\n",
+                            client_ip, ntohs(client_addr.sin_port), result);
+                }
+            } else {
+                fprintf(stderr, "USB packet received but USB server not initialized\n");
             }
         } else {
-            if (send(client_socket, buffer, bytes_received, 0) < 0) {
+            /* Legacy echo mode for non-USB packets */
+            printf("Received from %s:%d (%d bytes)\n",
+                   client_ip, ntohs(client_addr.sin_port), bytes_received);
+
+#if TLS_ENABLED
+            if (tls != NULL) {
+                if (tls_write(tls, (char*)&packet, bytes_received) <= 0) {
+                    fprintf(stderr, "TLS write failed\n");
+                    break;
+                }
+            } else {
+                if (send(client_socket, &packet, bytes_received, 0) < 0) {
+                    perror("send failed");
+                    break;
+                }
+            }
+#else
+            if (send(client_socket, &packet, bytes_received, 0) < 0) {
                 perror("send failed");
                 break;
             }
-        }
-#else
-        if (send(client_socket, buffer, bytes_received, 0) < 0) {
-            perror("send failed");
-            break;
-        }
 #endif
+        }
     }
 
     if (bytes_received == 0) {
