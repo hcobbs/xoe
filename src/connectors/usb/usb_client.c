@@ -408,6 +408,24 @@ int usb_client_stop(usb_client_t* client)
         }
     }
 
+    /* Unregister all devices from server before disconnecting */
+    if (client->socket_fd >= 0) {
+        printf("Unregistering devices from server...\n");
+        for (i = 0; i < client->device_count; i++) {
+            uint32_t device_id;
+            int result;
+
+            device_id = ((uint32_t)client->devices[i].config.vendor_id << 16) |
+                        client->devices[i].config.product_id;
+
+            result = usb_client_unregister_device(client, device_id);
+            if (result != 0) {
+                fprintf(stderr, "Warning: Failed to unregister device %d: error %d\n",
+                        i + 1, result);
+            }
+        }
+    }
+
     /* Close network connection (this will cause network thread to exit) */
     if (client->socket_fd >= 0) {
         close(client->socket_fd);

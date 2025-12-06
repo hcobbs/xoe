@@ -204,6 +204,11 @@ void *handle_client(void *arg) {
     }
 
 cleanup:
+    /* Unregister client from USB server if initialized */
+    if (g_usb_server != NULL) {
+        usb_server_unregister_client(g_usb_server, client_socket);
+    }
+
 #if TLS_ENABLED
     if (tls != NULL) {
         tls_session_shutdown(tls);
