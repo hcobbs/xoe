@@ -80,14 +80,38 @@ typedef struct {
  * Packs a USB URB header and transfer data into a XOE packet structure
  * for network transmission. Calculates checksum over the entire payload.
  *
- * @param urb_header Pointer to URB header to encapsulate
- * @param transfer_data Pointer to transfer data buffer (may be NULL)
+ * @param urb_header Pointer to URB header to encapsulate (read-only)
+ * @param transfer_data Pointer to transfer data buffer (read-only, may be NULL)
  * @param data_len Length of transfer data in bytes
- * @param packet Pointer to output XOE packet structure
+ * @param packet Pointer to output XOE packet structure (caller-allocated)
  * @return 0 on success, negative error code on failure
  *
- * Note: The caller is responsible for freeing packet->payload and
- *       packet->payload->data after transmission.
+ * MEMORY OWNERSHIP:
+ * ----------------
+ * Inputs (not owned by function):
+ * - urb_header: Read-only, not modified or freed
+ * - transfer_data: Read-only, not modified or freed
+ * - packet: Caller-allocated structure, not freed by function
+ *
+ * Outputs (owned by caller after successful return):
+ * - packet->payload: Allocated by this function (caller must free)
+ * - packet->payload->data: Allocated by this function (caller must free)
+ * - packet->payload->owns_data: Set to TRUE
+ *
+ * The caller MUST call usb_protocol_free_payload(packet) after transmission
+ * to free the allocated payload and data buffer. Failure to do so will
+ * result in memory leaks.
+ *
+ * On failure (return < 0):
+ * - No memory is allocated
+ * - packet structure is not modified
+ *
+ * Example:
+ *   xoe_packet_t packet;
+ *   if (usb_protocol_encapsulate(&urb, data, len, &packet) == 0) {
+ *       // ... transmit packet ...
+ *       usb_protocol_free_payload(&packet);  // Required!
+ *   }
  */
 int usb_protocol_encapsulate(
     const usb_urb_header_t* urb_header,
@@ -102,13 +126,41 @@ int usb_protocol_encapsulate(
  * Unpacks a XOE packet into a USB URB header and transfer data.
  * Verifies checksum and validates packet structure.
  *
- * @param packet Pointer to input XOE packet
- * @param urb_header Pointer to output URB header structure
- * @param transfer_data Pointer to output buffer for transfer data
- * @param data_len Pointer to variable receiving actual data length
+ * @param packet Pointer to input XOE packet (read-only)
+ * @param urb_header Pointer to output URB header structure (caller-allocated)
+ * @param transfer_data Pointer to output buffer for transfer data (caller-allocated)
+ * @param data_len Pointer to variable receiving actual data length (output)
  * @return 0 on success, negative error code on failure
  *
- * Note: transfer_data buffer must be at least USB_MAX_DATA_SIZE bytes.
+ * MEMORY OWNERSHIP:
+ * ----------------
+ * Inputs (not owned by function):
+ * - packet: Read-only, not modified or freed
+ * - packet->payload: Not freed by this function (caller manages)
+ * - packet->payload->data: Not freed by this function (caller manages)
+ *
+ * Outputs (owned by caller):
+ * - urb_header: Caller-allocated structure, filled by this function
+ * - transfer_data: Caller-allocated buffer, filled by this function
+ *   Must be at least USB_MAX_DATA_SIZE (4048) bytes
+ * - data_len: Set to actual bytes copied to transfer_data
+ *
+ * This function COPIES data from the packet into caller-provided buffers.
+ * It does NOT allocate memory and does NOT free the input packet.
+ *
+ * The caller is responsible for:
+ * 1. Allocating urb_header structure (can be stack or heap)
+ * 2. Allocating transfer_data buffer (at least USB_MAX_DATA_SIZE bytes)
+ * 3. Freeing the input packet (if needed) after decapsulation
+ *
+ * Example:
+ *   usb_urb_header_t urb;
+ *   uint8_t data[USB_MAX_DATA_SIZE];
+ *   uint32_t len;
+ *   if (usb_protocol_decapsulate(&packet, &urb, data, &len) == 0) {
+ *       // Use urb and data...
+ *   }
+ *   // Caller must still free packet if it was dynamically allocated
  */
 int usb_protocol_decapsulate(
     const xoe_packet_t* packet,
