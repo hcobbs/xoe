@@ -14,14 +14,16 @@
 /* Helper function to copy string (handles NULL) */
 static char* copy_string(const char *src) {
     char *dst;
+    size_t len;
     if (src == NULL) {
         return NULL;
     }
-    dst = (char*)malloc(strlen(src) + 1);
+    len = strlen(src);
+    dst = (char*)malloc(len + 1);
     if (dst == NULL) {
         return NULL;
     }
-    strcpy(dst, src);
+    memcpy(dst, src, len + 1);  /* Safe: explicit size prevents overflow */
     return dst;
 }
 

@@ -70,12 +70,15 @@ usb_client_t* usb_client_init(const char* server_ip,
     memset(client, 0, sizeof(usb_client_t));
 
     /* Copy server information */
-    client->server_ip = (char*)malloc(strlen(server_ip) + 1);
-    if (client->server_ip == NULL) {
-        free(client);
-        return NULL;
+    {
+        size_t ip_len = strlen(server_ip);
+        client->server_ip = (char*)malloc(ip_len + 1);
+        if (client->server_ip == NULL) {
+            free(client);
+            return NULL;
+        }
+        memcpy(client->server_ip, server_ip, ip_len + 1);  /* Safe: explicit size */
     }
-    strcpy(client->server_ip, server_ip);
     client->server_port = server_port;
 
     /* Allocate device array */
