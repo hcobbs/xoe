@@ -23,10 +23,16 @@ typedef struct {
 #endif
 } client_info_t;
 
+/* Forward declaration for USB server */
+typedef struct usb_server_t usb_server_t;
+
 /* Global TLS context (declared extern for use in state handlers) */
 #if TLS_ENABLED
 extern SSL_CTX* g_tls_ctx;
 #endif
+
+/* Global USB server (declared extern for use in state handlers) */
+extern usb_server_t* g_usb_server;
 
 /**
  * acquire_client_slot - Acquire a client slot from the pool

@@ -237,6 +237,36 @@ int usb_client_start(usb_client_t* client)
         return result;
     }
 
+    /* Register all devices with server */
+    {
+        int i;
+        printf("\nRegistering USB devices with server...\n");
+        for (i = 0; i < client->device_count; i++) {
+            uint32_t device_id;
+
+            /* Construct device_id from VID:PID */
+            device_id = ((uint32_t)client->devices[i].config.vendor_id << 16) |
+                        client->devices[i].config.product_id;
+
+            printf("  Registering device %d: VID:PID %04x:%04x (device_id=0x%08x)\n",
+                   i + 1,
+                   client->devices[i].config.vendor_id,
+                   client->devices[i].config.product_id,
+                   device_id);
+
+            result = usb_client_register_device(client, device_id, 5000);
+            if (result != 0) {
+                fprintf(stderr, "Failed to register device %d: error %d\n",
+                        i + 1, result);
+                fprintf(stderr, "Closing server connection\n");
+                close(client->socket_fd);
+                client->socket_fd = -1;
+                return result;
+            }
+        }
+        printf("All devices registered successfully\n\n");
+    }
+
     /* Mark as running */
     pthread_mutex_lock(&client->lock);
 
@@ -375,6 +405,24 @@ int usb_client_stop(usb_client_t* client)
         if (client->transfer_threads[i] != 0) {
             pthread_join(client->transfer_threads[i], NULL);
             client->transfer_threads[i] = 0;
+        }
+    }
+
+    /* Unregister all devices from server before disconnecting */
+    if (client->socket_fd >= 0) {
+        printf("Unregistering devices from server...\n");
+        for (i = 0; i < client->device_count; i++) {
+            uint32_t device_id;
+            int result;
+
+            device_id = ((uint32_t)client->devices[i].config.vendor_id << 16) |
+                        client->devices[i].config.product_id;
+
+            result = usb_client_unregister_device(client, device_id);
+            if (result != 0) {
+                fprintf(stderr, "Warning: Failed to unregister device %d: error %d\n",
+                        i + 1, result);
+            }
         }
     }
 
@@ -546,6 +594,136 @@ int usb_client_receive_urb(usb_client_t* client,
 
     pthread_mutex_unlock(&client->lock);
 
+    return 0;
+}
+
+/**
+ * @brief Register device with server
+ */
+int usb_client_register_device(usb_client_t* client,
+                                uint32_t device_id,
+                                unsigned int timeout_ms)
+{
+    usb_urb_header_t reg_urb, response_urb;
+    uint32_t response_len;
+    int result;
+
+    /* Validate parameters */
+    if (client == NULL) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Build registration URB */
+    memset(&reg_urb, 0, sizeof(reg_urb));
+    reg_urb.command = USB_CMD_REGISTER;
+    reg_urb.seqnum = usb_client_alloc_seqnum(client);
+    reg_urb.device_id = device_id;
+
+    /* Send registration request */
+    result = usb_client_send_urb(client, &reg_urb, NULL, 0);
+    if (result != 0) {
+        fprintf(stderr, "Failed to send registration request: error %d\n",
+                result);
+        return result;
+    }
+
+    /* Wait for registration response (with timeout) */
+    /* For now, use simple blocking receive - timeout handling TBD */
+    (void)timeout_ms;  /* Unused for now */
+
+    response_len = 0;
+    result = usb_client_receive_urb(client, &response_urb, NULL,
+                                     &response_len);
+    if (result != 0) {
+        fprintf(stderr, "Failed to receive registration response: error %d\n",
+                result);
+        return result;
+    }
+
+    /* Verify response matches request */
+    if (response_urb.command != USB_RET_REGISTER) {
+        fprintf(stderr, "Unexpected response command: 0x%04x\n",
+                response_urb.command);
+        return E_PROTOCOL_ERROR;
+    }
+
+    if (response_urb.seqnum != reg_urb.seqnum) {
+        fprintf(stderr, "Sequence number mismatch: expected %u, got %u\n",
+                reg_urb.seqnum, response_urb.seqnum);
+        return E_PROTOCOL_ERROR;
+    }
+
+    /* Check registration result */
+    if (response_urb.status != 0) {
+        fprintf(stderr, "Server registration failed: status %d\n",
+                response_urb.status);
+        return response_urb.status;
+    }
+
+    printf("Device 0x%08x registered with server successfully\n", device_id);
+    return 0;
+}
+
+/**
+ * @brief Unregister device from server
+ */
+int usb_client_unregister_device(usb_client_t* client,
+                                  uint32_t device_id)
+{
+    usb_urb_header_t unreg_urb, response_urb;
+    uint32_t response_len;
+    int result;
+
+    /* Validate parameters */
+    if (client == NULL) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Build unregistration URB */
+    memset(&unreg_urb, 0, sizeof(unreg_urb));
+    unreg_urb.command = USB_CMD_UNREGISTER;
+    unreg_urb.seqnum = usb_client_alloc_seqnum(client);
+    unreg_urb.device_id = device_id;
+
+    /* Send unregistration request */
+    result = usb_client_send_urb(client, &unreg_urb, NULL, 0);
+    if (result != 0) {
+        fprintf(stderr, "Failed to send unregistration request: error %d\n",
+                result);
+        return result;
+    }
+
+    /* Wait for unregistration response */
+    response_len = 0;
+    result = usb_client_receive_urb(client, &response_urb, NULL,
+                                     &response_len);
+    if (result != 0) {
+        fprintf(stderr, "Failed to receive unregistration response: error %d\n",
+                result);
+        return result;
+    }
+
+    /* Verify response matches request */
+    if (response_urb.command != USB_RET_UNREGISTER) {
+        fprintf(stderr, "Unexpected response command: 0x%04x\n",
+                response_urb.command);
+        return E_PROTOCOL_ERROR;
+    }
+
+    if (response_urb.seqnum != unreg_urb.seqnum) {
+        fprintf(stderr, "Sequence number mismatch: expected %u, got %u\n",
+                unreg_urb.seqnum, response_urb.seqnum);
+        return E_PROTOCOL_ERROR;
+    }
+
+    /* Check unregistration result */
+    if (response_urb.status != 0) {
+        fprintf(stderr, "Server unregistration failed: status %d\n",
+                response_urb.status);
+        return response_urb.status;
+    }
+
+    printf("Device 0x%08x unregistered from server\n", device_id);
     return 0;
 }
 

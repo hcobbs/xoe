@@ -19,6 +19,7 @@
 #include "core/config.h"
 #include "core/server.h"
 #include "lib/common/definitions.h"
+#include "connectors/usb/usb_server.h"
 
 #if TLS_ENABLED
 #include "lib/security/tls_config.h"
@@ -126,6 +127,15 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
     /* Initialize the client pool */
     init_client_pool();
 
+    /* Initialize USB server for USB protocol routing */
+    g_usb_server = usb_server_init();
+    if (g_usb_server == NULL) {
+        fprintf(stderr, "Warning: Failed to initialize USB server\n");
+        fprintf(stderr, "USB protocol routing will be disabled\n");
+    } else {
+        printf("USB server initialized\n");
+    }
+
     /* Set up signal handlers for graceful shutdown */
     signal(SIGINT, server_signal_handler);
     signal(SIGTERM, server_signal_handler);
@@ -197,6 +207,12 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
 
     /* Graceful shutdown initiated */
     printf("\nServer shutting down gracefully...\n");
+
+    /* Cleanup USB server */
+    if (g_usb_server != NULL) {
+        usb_server_cleanup(g_usb_server);
+        g_usb_server = NULL;
+    }
 
 #if TLS_ENABLED
     /* Cleanup TLS context on shutdown */
