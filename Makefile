@@ -16,6 +16,7 @@ TESTDIR  = $(SRCDIR)/tests
 # Source files (auto-discover all .c files in new structure)
 SOURCES = $(wildcard $(COREDIR)/*.c)
 SOURCES += $(wildcard $(COREDIR)/fsm/*.c)
+SOURCES += $(wildcard $(COREDIR)/mgmt/*.c)
 SOURCES += $(wildcard $(LIBDIR)/*/*.c)
 SOURCES += $(wildcard $(CONNECTORDIR)/*/*.c)
 

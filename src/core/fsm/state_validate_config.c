@@ -17,7 +17,7 @@
  * state_validate_config - Validate configuration settings
  * @config: Pointer to configuration structure
  *
- * Returns: STATE_MODE_SELECT on success, STATE_CLEANUP on validation failure
+ * Returns: STATE_START_MGMT on success, STATE_CLEANUP on validation failure
  *
  * Validates:
  * - Serial mode requires client mode (-s requires -c)
@@ -50,5 +50,5 @@ xoe_state_t state_validate_config(xoe_config_t *config) {
         }
     }
 
-    return STATE_MODE_SELECT;
+    return STATE_START_MGMT;
 }

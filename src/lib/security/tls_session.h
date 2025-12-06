@@ -70,6 +70,30 @@ int tls_session_handshake(SSL* ssl);
 int tls_session_shutdown(SSL* ssl);
 
 /**
+ * @brief Create a new TLS session for client-side connection
+ *
+ * Creates an SSL object from the client context, associates it with the
+ * server socket, and performs the client-side TLS handshake.
+ * This is a blocking operation that will wait for the server to complete the handshake.
+ *
+ * On success, returns an SSL object ready for encrypted I/O.
+ * On failure, returns NULL and the socket should be closed.
+ *
+ * @param ctx           Client SSL context (from tls_context_init_client)
+ * @param server_socket Server socket file descriptor
+ * @return SSL* on success, NULL on failure
+ *
+ * Error codes (check tls_get_last_error()):
+ *   E_INVALID_ARGUMENT - Invalid ctx or socket
+ *   E_OUT_OF_MEMORY    - SSL object allocation failed
+ *   E_TLS_HANDSHAKE_FAILED - Handshake failed
+ *   E_NETWORK_ERROR    - Network error during handshake
+ *   E_TIMEOUT          - Handshake timeout
+ *   E_UNKNOWN_ERROR    - Other OpenSSL error
+ */
+SSL* tls_session_create_client(SSL_CTX* ctx, int server_socket);
+
+/**
  * @brief Destroy TLS session and free resources
  *
  * Frees the SSL object and associated resources.

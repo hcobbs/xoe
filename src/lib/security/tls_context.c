@@ -126,11 +126,17 @@ int tls_context_configure(SSL_CTX* ctx, int tls_version) {
         return E_TLS_VERSION_MISMATCH;
     }
 
-    /* Set cipher suites for TLS 1.3 */
-    /* Note: TLS 1.2 uses SSL_CTX_set_cipher_list(), but we use secure defaults */
+    /* Set cipher suites based on TLS version */
     if (tls_version == ENCRYPT_TLS13) {
+        /* TLS 1.3: Use SSL_CTX_set_ciphersuites() */
         if (!SSL_CTX_set_ciphersuites(ctx, TLS_CIPHER_SUITES)) {
-            tls_print_errors("Failed to set cipher suites");
+            tls_print_errors("Failed to set TLS 1.3 cipher suites");
+            return E_TLS_CIPHER_MISMATCH;
+        }
+    } else if (tls_version == ENCRYPT_TLS12) {
+        /* TLS 1.2: Use SSL_CTX_set_cipher_list() with strong ciphers only */
+        if (!SSL_CTX_set_cipher_list(ctx, TLS_CIPHER_LIST)) {
+            tls_print_errors("Failed to set TLS 1.2 cipher list");
             return E_TLS_CIPHER_MISMATCH;
         }
     }
@@ -140,6 +146,48 @@ int tls_context_configure(SSL_CTX* ctx, int tls_version) {
     SSL_CTX_set_options(ctx, SSL_OP_NO_RENEGOTIATION); /* Disable renegotiation */
 
     return 0;
+}
+
+SSL_CTX* tls_context_init_client(int tls_version) {
+    SSL_CTX* ctx;
+    int ret;
+
+    /* Validate arguments */
+    if (tls_version != ENCRYPT_TLS12 && tls_version != ENCRYPT_TLS13) {
+        fprintf(stderr, "Invalid TLS version: %d (must be ENCRYPT_TLS12 or ENCRYPT_TLS13)\n", tls_version);
+        return NULL;
+    }
+
+    /* Create new SSL context using TLS client method */
+    ctx = SSL_CTX_new(TLS_client_method());
+    if (ctx == NULL) {
+        tls_print_errors("Failed to create SSL client context");
+        return NULL;
+    }
+
+    /* Configure TLS version and cipher suites */
+    ret = tls_context_configure(ctx, tls_version);
+    if (ret != 0) {
+        SSL_CTX_free(ctx);
+        return NULL;
+    }
+
+    /* Client certificate verification mode */
+    /* CURRENT BEHAVIOR: SSL_VERIFY_NONE allows self-signed server certificates */
+    /* This is appropriate for testing but NOT for production use */
+    /*
+     * SECURITY NOTE: Certificate verification is currently disabled to support
+     * testing with self-signed certificates. In production deployments:
+     * 1. Use SSL_VERIFY_PEER to verify server certificate
+     * 2. Load trusted CA certificates with SSL_CTX_load_verify_locations()
+     * 3. Consider hostname verification with SSL_set_hostflags()
+     *
+     * TODO: Make verification mode runtime-configurable via command-line option
+     * or configuration file (TLS_DEFAULT_VERIFY_MODE is compile-time only)
+     */
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+
+    return ctx;
 }
 
 void tls_context_cleanup(SSL_CTX* ctx) {

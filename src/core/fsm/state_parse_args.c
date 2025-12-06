@@ -50,8 +50,8 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
     /* Store program name for usage output */
     config->program_name = argv[0];
 
-    /* Phase 1: Parse short options with getopt */
-    while ((opt = getopt(argc, argv, "i:p:c:e:s:b:u:h")) != -1) {
+    /* Phase 1: Parse short options with getopt (+ stops at first non-option) */
+    while ((opt = getopt(argc, argv, "+i:p:c:e:s:b:u:h")) != -1) {
         switch (opt) {
             case 'i':
                 config->listen_address = optarg;
@@ -179,11 +179,14 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
                 return STATE_CLEANUP;
 
             default:
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
+                /* Unknown option - might be a long option, let Phase 2 handle it */
+                /* Reset optind to re-process this argument in Phase 2 */
+                if (optind > 0) optind--;
+                goto phase2;  /* Jump to Phase 2 to handle long options */
         }
     }
+
+phase2:
 
     /* Phase 2: Parse long options manually */
     while (optind < argc) {

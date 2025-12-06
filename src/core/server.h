@@ -72,4 +72,36 @@ void init_client_pool(void);
  */
 void *handle_client(void *arg);
 
+/**
+ * disconnect_all_clients - Close all active client connections
+ *
+ * Closes sockets for all clients currently in the pool. Threads will
+ * exit when they detect the closed socket. Does NOT wait for threads
+ * to exit - use wait_for_clients() for that.
+ *
+ * Thread-safe: Uses pool mutex for protection.
+ */
+void disconnect_all_clients(void);
+
+/**
+ * wait_for_clients - Wait for all client threads to exit
+ * @timeout_sec: Maximum seconds to wait (0 = no wait, just check)
+ *
+ * Returns: Number of clients still active after timeout
+ *
+ * Polls the client pool for up to timeout_sec seconds, waiting for
+ * all in_use flags to become 0 (indicating threads have exited).
+ * Returns early if all clients disconnect before timeout.
+ */
+int wait_for_clients(int timeout_sec);
+
+/**
+ * get_active_client_count - Get count of currently active clients
+ *
+ * Returns: Number of client slots currently in use
+ *
+ * Thread-safe function to count active client connections.
+ */
+int get_active_client_count(void);
+
 #endif /* CORE_SERVER_H */
