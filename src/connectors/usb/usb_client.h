@@ -234,6 +234,34 @@ int usb_client_receive_urb(usb_client_t* client,
                            uint32_t* data_len);
 
 /**
+ * @brief Register device with server
+ *
+ * Sends registration request to server and waits for confirmation.
+ * This must be called after connecting to server and before sending URBs.
+ *
+ * @param client Client context
+ * @param device_id Device identifier (VID:PID) to register
+ * @param timeout_ms Timeout in milliseconds
+ * @return 0 on success, negative error code on failure
+ */
+int usb_client_register_device(usb_client_t* client,
+                                uint32_t device_id,
+                                unsigned int timeout_ms);
+
+/**
+ * @brief Unregister device from server
+ *
+ * Sends unregistration request to server and waits for confirmation.
+ * This should be called before disconnecting from server.
+ *
+ * @param client Client context
+ * @param device_id Device identifier to unregister
+ * @return 0 on success, negative error code on failure
+ */
+int usb_client_unregister_device(usb_client_t* client,
+                                  uint32_t device_id);
+
+/**
  * @brief Submit URB with bidirectional request/response
  *
  * Sends URB to server and waits for response using pending request API.

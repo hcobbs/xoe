@@ -550,6 +550,136 @@ int usb_client_receive_urb(usb_client_t* client,
 }
 
 /**
+ * @brief Register device with server
+ */
+int usb_client_register_device(usb_client_t* client,
+                                uint32_t device_id,
+                                unsigned int timeout_ms)
+{
+    usb_urb_header_t reg_urb, response_urb;
+    uint32_t response_len;
+    int result;
+
+    /* Validate parameters */
+    if (client == NULL) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Build registration URB */
+    memset(&reg_urb, 0, sizeof(reg_urb));
+    reg_urb.command = USB_CMD_REGISTER;
+    reg_urb.seqnum = usb_client_alloc_seqnum(client);
+    reg_urb.device_id = device_id;
+
+    /* Send registration request */
+    result = usb_client_send_urb(client, &reg_urb, NULL, 0);
+    if (result != 0) {
+        fprintf(stderr, "Failed to send registration request: error %d\n",
+                result);
+        return result;
+    }
+
+    /* Wait for registration response (with timeout) */
+    /* For now, use simple blocking receive - timeout handling TBD */
+    (void)timeout_ms;  /* Unused for now */
+
+    response_len = 0;
+    result = usb_client_receive_urb(client, &response_urb, NULL,
+                                     &response_len);
+    if (result != 0) {
+        fprintf(stderr, "Failed to receive registration response: error %d\n",
+                result);
+        return result;
+    }
+
+    /* Verify response matches request */
+    if (response_urb.command != USB_RET_REGISTER) {
+        fprintf(stderr, "Unexpected response command: 0x%04x\n",
+                response_urb.command);
+        return E_PROTOCOL_ERROR;
+    }
+
+    if (response_urb.seqnum != reg_urb.seqnum) {
+        fprintf(stderr, "Sequence number mismatch: expected %u, got %u\n",
+                reg_urb.seqnum, response_urb.seqnum);
+        return E_PROTOCOL_ERROR;
+    }
+
+    /* Check registration result */
+    if (response_urb.status != 0) {
+        fprintf(stderr, "Server registration failed: status %d\n",
+                response_urb.status);
+        return response_urb.status;
+    }
+
+    printf("Device 0x%08x registered with server successfully\n", device_id);
+    return 0;
+}
+
+/**
+ * @brief Unregister device from server
+ */
+int usb_client_unregister_device(usb_client_t* client,
+                                  uint32_t device_id)
+{
+    usb_urb_header_t unreg_urb, response_urb;
+    uint32_t response_len;
+    int result;
+
+    /* Validate parameters */
+    if (client == NULL) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Build unregistration URB */
+    memset(&unreg_urb, 0, sizeof(unreg_urb));
+    unreg_urb.command = USB_CMD_UNREGISTER;
+    unreg_urb.seqnum = usb_client_alloc_seqnum(client);
+    unreg_urb.device_id = device_id;
+
+    /* Send unregistration request */
+    result = usb_client_send_urb(client, &unreg_urb, NULL, 0);
+    if (result != 0) {
+        fprintf(stderr, "Failed to send unregistration request: error %d\n",
+                result);
+        return result;
+    }
+
+    /* Wait for unregistration response */
+    response_len = 0;
+    result = usb_client_receive_urb(client, &response_urb, NULL,
+                                     &response_len);
+    if (result != 0) {
+        fprintf(stderr, "Failed to receive unregistration response: error %d\n",
+                result);
+        return result;
+    }
+
+    /* Verify response matches request */
+    if (response_urb.command != USB_RET_UNREGISTER) {
+        fprintf(stderr, "Unexpected response command: 0x%04x\n",
+                response_urb.command);
+        return E_PROTOCOL_ERROR;
+    }
+
+    if (response_urb.seqnum != unreg_urb.seqnum) {
+        fprintf(stderr, "Sequence number mismatch: expected %u, got %u\n",
+                unreg_urb.seqnum, response_urb.seqnum);
+        return E_PROTOCOL_ERROR;
+    }
+
+    /* Check unregistration result */
+    if (response_urb.status != 0) {
+        fprintf(stderr, "Server unregistration failed: status %d\n",
+                response_urb.status);
+        return response_urb.status;
+    }
+
+    printf("Device 0x%08x unregistered from server\n", device_id);
+    return 0;
+}
+
+/**
  * @brief Submit URB with bidirectional request/response
  *
  * Phase 5.5: High-level API for bidirectional USB transfers.

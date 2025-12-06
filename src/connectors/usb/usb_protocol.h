@@ -23,6 +23,10 @@
 #define USB_CMD_UNLINK      0x0002  /* Cancel URB */
 #define USB_RET_SUBMIT      0x0003  /* URB completion */
 #define USB_RET_UNLINK      0x0004  /* Unlink response */
+#define USB_CMD_REGISTER    0x0005  /* Register device with server */
+#define USB_RET_REGISTER    0x0006  /* Registration response */
+#define USB_CMD_UNREGISTER  0x0007  /* Unregister device from server */
+#define USB_RET_UNREGISTER  0x0008  /* Unregister response */
 #define USB_CMD_ENUM        0x0010  /* Device enumeration */
 #define USB_RET_ENUM        0x0011  /* Enumeration response */
 

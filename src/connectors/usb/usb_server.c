@@ -236,6 +236,87 @@ int usb_server_route_urb(usb_server_t* server,
 }
 
 /**
+ * @brief Handle client registration request
+ */
+static int usb_server_handle_register(usb_server_t* server,
+                                       const usb_urb_header_t* urb_header,
+                                       int sender_fd)
+{
+    xoe_packet_t response;
+    usb_urb_header_t response_urb;
+    int result;
+    ssize_t sent;
+
+    /* Register client with device_id from URB header */
+    result = usb_server_register_client(server, sender_fd,
+                                         urb_header->device_id);
+
+    /* Build registration response */
+    memset(&response_urb, 0, sizeof(response_urb));
+    response_urb.command = USB_RET_REGISTER;
+    response_urb.seqnum = urb_header->seqnum;
+    response_urb.device_id = urb_header->device_id;
+    response_urb.status = result;
+
+    /* Encapsulate response */
+    result = usb_protocol_encapsulate(&response_urb, NULL, 0, &response);
+    if (result != 0) {
+        fprintf(stderr, "USB Server: Failed to encapsulate registration response\n");
+        return result;
+    }
+
+    /* Send response back to client */
+    sent = send(sender_fd, &response, sizeof(xoe_packet_t), 0);
+    if (sent < 0) {
+        fprintf(stderr, "USB Server: Failed to send registration response: %s\n",
+                strerror(errno));
+        return E_NETWORK_ERROR;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief Handle client unregistration request
+ */
+static int usb_server_handle_unregister(usb_server_t* server,
+                                         const usb_urb_header_t* urb_header,
+                                         int sender_fd)
+{
+    xoe_packet_t response;
+    usb_urb_header_t response_urb;
+    int result;
+    ssize_t sent;
+
+    /* Unregister client */
+    result = usb_server_unregister_client(server, sender_fd);
+
+    /* Build unregistration response */
+    memset(&response_urb, 0, sizeof(response_urb));
+    response_urb.command = USB_RET_UNREGISTER;
+    response_urb.seqnum = urb_header->seqnum;
+    response_urb.device_id = urb_header->device_id;
+    response_urb.status = result;
+
+    /* Encapsulate response */
+    result = usb_protocol_encapsulate(&response_urb, NULL, 0, &response);
+    if (result != 0) {
+        fprintf(stderr, "USB Server: Failed to encapsulate unregistration response\n");
+        return result;
+    }
+
+    /* Send response back to client */
+    sent = send(sender_fd, &response, sizeof(xoe_packet_t), 0);
+    if (sent < 0) {
+        fprintf(stderr, "USB Server: Failed to send unregistration response: %s\n",
+                strerror(errno));
+        return E_NETWORK_ERROR;
+    }
+
+    return 0;
+}
+
+/**
  * @brief Handle incoming URB from client
  */
 int usb_server_handle_urb(usb_server_t* server,
@@ -263,12 +344,28 @@ int usb_server_handle_urb(usb_server_t* server,
         return result;
     }
 
-    /* Route URB to target client */
-    result = usb_server_route_urb(server, &urb_header,
-                                  data_buffer, urb_header.actual_length,
-                                  sender_fd);
+    /* Handle command based on type */
+    switch (urb_header.command) {
+        case USB_CMD_REGISTER:
+            return usb_server_handle_register(server, &urb_header, sender_fd);
 
-    return result;
+        case USB_CMD_UNREGISTER:
+            return usb_server_handle_unregister(server, &urb_header, sender_fd);
+
+        case USB_CMD_SUBMIT:
+        case USB_RET_SUBMIT:
+            /* Route URB to target client */
+            result = usb_server_route_urb(server, &urb_header,
+                                          data_buffer, urb_header.actual_length,
+                                          sender_fd);
+            return result;
+
+        default:
+            fprintf(stderr, "USB Server: Unknown command type: 0x%04x\n",
+                    urb_header.command);
+            server->routing_errors++;
+            return E_INVALID_ARGUMENT;
+    }
 }
 
 /* ========================================================================
