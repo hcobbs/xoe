@@ -1,4 +1,5 @@
 #include "mgmt_config.h"
+#include "lib/common/definitions.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -52,18 +53,36 @@ static int copy_config(xoe_config_t *dst, const xoe_config_t *src) {
     dst->exit_code = src->exit_code;
     dst->server_fd = src->server_fd;
 
-    /* Copy string fields */
+    /* Copy string fields with rollback on allocation failure */
     free_string(&dst->listen_address);
     dst->listen_address = copy_string(src->listen_address);
+    if (src->listen_address != NULL && dst->listen_address == NULL) {
+        return E_OUT_OF_MEMORY;
+    }
 
     free_string(&dst->connect_server_ip);
     dst->connect_server_ip = copy_string(src->connect_server_ip);
+    if (src->connect_server_ip != NULL && dst->connect_server_ip == NULL) {
+        free_string(&dst->listen_address);
+        return E_OUT_OF_MEMORY;
+    }
 
     free_string(&dst->serial_device);
     dst->serial_device = copy_string(src->serial_device);
+    if (src->serial_device != NULL && dst->serial_device == NULL) {
+        free_string(&dst->listen_address);
+        free_string(&dst->connect_server_ip);
+        return E_OUT_OF_MEMORY;
+    }
 
     free_string(&dst->program_name);
     dst->program_name = copy_string(src->program_name);
+    if (src->program_name != NULL && dst->program_name == NULL) {
+        free_string(&dst->listen_address);
+        free_string(&dst->connect_server_ip);
+        free_string(&dst->serial_device);
+        return E_OUT_OF_MEMORY;
+    }
 
     /* Copy fixed-size arrays */
     memcpy(dst->cert_path, src->cert_path, TLS_CERT_PATH_MAX);
