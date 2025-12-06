@@ -226,11 +226,15 @@ int usb_server_route_urb(usb_server_t* server,
         fprintf(stderr, "USB Server: Failed to route packet: %s\n",
                 strerror(errno));
         server->routing_errors++;
+        usb_protocol_free_payload(&packet);  /* Free allocated payload */
         return E_NETWORK_ERROR;
     }
 
     /* Update statistics */
     server->packets_routed++;
+
+    /* Free allocated payload after successful send */
+    usb_protocol_free_payload(&packet);
 
     return 0;
 }
@@ -270,8 +274,12 @@ static int usb_server_handle_register(usb_server_t* server,
     if (sent < 0) {
         fprintf(stderr, "USB Server: Failed to send registration response: %s\n",
                 strerror(errno));
+        usb_protocol_free_payload(&response);  /* Free allocated payload */
         return E_NETWORK_ERROR;
     }
+
+    /* Free allocated payload after successful send */
+    usb_protocol_free_payload(&response);
 
     return 0;
 }
@@ -310,8 +318,12 @@ static int usb_server_handle_unregister(usb_server_t* server,
     if (sent < 0) {
         fprintf(stderr, "USB Server: Failed to send unregistration response: %s\n",
                 strerror(errno));
+        usb_protocol_free_payload(&response);  /* Free allocated payload */
         return E_NETWORK_ERROR;
     }
+
+    /* Free allocated payload after successful send */
+    usb_protocol_free_payload(&response);
 
     return 0;
 }

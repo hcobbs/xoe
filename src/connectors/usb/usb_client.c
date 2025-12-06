@@ -536,6 +536,7 @@ int usb_client_send_urb(usb_client_t* client,
     sent = send(client->socket_fd, &packet, sizeof(xoe_packet_t), 0);
     if (sent < 0) {
         fprintf(stderr, "Failed to send URB to server: %s\n", strerror(errno));
+        usb_protocol_free_payload(&packet);  /* Free allocated payload */
         return E_NETWORK_ERROR;
     }
 
@@ -545,6 +546,9 @@ int usb_client_send_urb(usb_client_t* client,
     client->packets_sent++;
 
     pthread_mutex_unlock(&client->lock);
+
+    /* Free allocated payload after successful send */
+    usb_protocol_free_payload(&packet);
 
     return 0;
 }
