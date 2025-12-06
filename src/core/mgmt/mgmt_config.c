@@ -229,6 +229,8 @@ int mgmt_config_apply_pending(mgmt_config_manager_t *mgr) {
  * Clear pending configuration
  */
 void mgmt_config_clear_pending(mgmt_config_manager_t *mgr) {
+    int result;
+
     if (mgr == NULL) {
         return;
     }
@@ -236,7 +238,12 @@ void mgmt_config_clear_pending(mgmt_config_manager_t *mgr) {
     pthread_mutex_lock(&mgr->mutex);
 
     /* Copy active to pending (discard changes) */
-    copy_config(&mgr->pending, &mgr->active);
+    result = copy_config(&mgr->pending, &mgr->active);
+    if (result != 0) {
+        fprintf(stderr, "Warning: Failed to clear pending config (out of memory)\n");
+        /* Note: Pending config may be in inconsistent state.
+         * Clear flag anyway to prevent use of partial config. */
+    }
 
     /* Clear pending flag */
     mgr->has_pending = 0;
@@ -262,7 +269,13 @@ int mgmt_config_validate_pending(mgmt_config_manager_t *mgr,
     temp_config.connect_server_ip = NULL;
     temp_config.serial_device = NULL;
     temp_config.program_name = NULL;
-    copy_config(&temp_config, &mgr->pending);
+
+    if (copy_config(&temp_config, &mgr->pending) != 0) {
+        pthread_mutex_unlock(&mgr->mutex);
+        snprintf(error_buf, error_buf_size,
+                 "Out of memory while validating configuration");
+        return -1;
+    }
 
     pthread_mutex_unlock(&mgr->mutex);
 
