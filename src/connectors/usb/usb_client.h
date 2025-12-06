@@ -233,6 +233,33 @@ int usb_client_receive_urb(usb_client_t* client,
                            void* data,
                            uint32_t* data_len);
 
+/**
+ * @brief Submit URB with bidirectional request/response
+ *
+ * Sends URB to server and waits for response using pending request API.
+ * This is the high-level interface for bidirectional USB transfers.
+ *
+ * @param client Client context
+ * @param urb_header URB header to send
+ * @param send_data Data to send with URB (may be NULL)
+ * @param send_len Length of send data
+ * @param recv_data Buffer to receive response data (may be NULL)
+ * @param recv_size Size of receive buffer
+ * @param actual_len Pointer to receive actual bytes received (output)
+ * @param timeout_ms Timeout in milliseconds
+ * @return 0 on success, E_TIMEOUT on timeout, negative error code on failure
+ *
+ * Phase 5.5: Bidirectional transfer coordination
+ */
+int usb_client_submit_urb_sync(usb_client_t* client,
+                                usb_urb_header_t* urb_header,
+                                const void* send_data,
+                                uint32_t send_len,
+                                void* recv_data,
+                                uint32_t recv_size,
+                                uint32_t* actual_len,
+                                unsigned int timeout_ms);
+
 /* ========================================================================
  * Thread Entry Points (Internal Use)
  * ======================================================================== */

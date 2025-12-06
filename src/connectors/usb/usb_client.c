@@ -549,6 +549,80 @@ int usb_client_receive_urb(usb_client_t* client,
     return 0;
 }
 
+/**
+ * @brief Submit URB with bidirectional request/response
+ *
+ * Phase 5.5: High-level API for bidirectional USB transfers.
+ * Combines send, pending request creation, wait, and cleanup.
+ */
+int usb_client_submit_urb_sync(usb_client_t* client,
+                                usb_urb_header_t* urb_header,
+                                const void* send_data,
+                                uint32_t send_len,
+                                void* recv_data,
+                                uint32_t recv_size,
+                                uint32_t* actual_len,
+                                unsigned int timeout_ms)
+{
+    usb_pending_request_t* request = NULL;
+    uint32_t seqnum;
+    int result;
+
+    /* Validate parameters */
+    if (client == NULL || urb_header == NULL) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Allocate sequence number */
+    seqnum = usb_client_alloc_seqnum(client);
+    if (seqnum == 0) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Update URB header with sequence number */
+    urb_header->seqnum = seqnum;
+
+    /* Create pending request for response matching */
+    request = usb_client_create_pending_request(
+        client,
+        seqnum,
+        urb_header->device_id,
+        urb_header->endpoint,
+        recv_data,
+        recv_size,
+        timeout_ms
+    );
+
+    if (request == NULL) {
+        return E_OUT_OF_MEMORY;
+    }
+
+    /* Send URB to server */
+    result = usb_client_send_urb(client, urb_header, send_data, send_len);
+    if (result != 0) {
+        usb_client_free_pending_request(client, request);
+        return result;
+    }
+
+    /* Wait for response */
+    result = usb_client_wait_pending_request(client, request);
+
+    /* Copy actual length from completed request */
+    if (actual_len != NULL) {
+        *actual_len = request->response_received;
+    }
+
+    /* Check result status */
+    if (result == 0 && request->status != 0) {
+        result = request->status;
+    }
+
+    /* Cleanup pending request */
+    usb_client_free_pending_request(client, request);
+
+    return result;
+}
+
 /* ========================================================================
  * Thread Entry Points
  * ======================================================================== */
@@ -670,12 +744,12 @@ void* usb_client_transfer_thread(void* arg)
             break;
         }
 
-        /* Phase 4: Read from USB device
+        /* Phase 5.5: Bidirectional USB transfers
          *
-         * For bulk IN transfers, continuously read from device
-         * and send to network. This is a simplified implementation
-         * that will be enhanced in future phases with proper
-         * request/response matching. */
+         * IN endpoint (USB→Network): Read from device, send to server
+         * OUT endpoint (Network→USB): Send request to server, wait for data,
+         *                              write to device
+         */
 
         if (device->config.bulk_in_endpoint != USB_NO_ENDPOINT) {
             int transferred = 0;
@@ -730,8 +804,78 @@ void* usb_client_transfer_thread(void* arg)
 
             printf("Device %d: Sent %d bytes to server\n",
                    ctx->device_index + 1, transferred);
-        } else {
-            /* No IN endpoint configured, sleep briefly */
+        }
+
+        /* Phase 5.5: Handle OUT endpoint (Network→USB) */
+        if (device->config.bulk_out_endpoint != USB_NO_ENDPOINT) {
+            unsigned char out_buffer[USB_MAX_TRANSFER_SIZE];
+            uint32_t actual_len = 0;
+
+            /* Prepare OUT request URB */
+            memset(&urb_header, 0, sizeof(usb_urb_header_t));
+            urb_header.command = USB_CMD_SUBMIT;
+            urb_header.device_id = ((uint32_t)device->config.vendor_id << 16) |
+                                   device->config.product_id;
+            urb_header.endpoint = device->config.bulk_out_endpoint;
+            urb_header.transfer_type = USB_TRANSFER_BULK;
+            urb_header.transfer_length = USB_MAX_TRANSFER_SIZE;
+
+            /* Submit bidirectional request to server */
+            result = usb_client_submit_urb_sync(
+                client,
+                &urb_header,
+                NULL,                       /* No data to send */
+                0,
+                out_buffer,                 /* Buffer for response */
+                USB_MAX_TRANSFER_SIZE,
+                &actual_len,
+                device->config.transfer_timeout_ms
+            );
+
+            /* Handle timeout (no OUT data available from server) */
+            if (result == E_TIMEOUT) {
+                continue;  /* Expected, retry */
+            }
+
+            /* Handle other errors */
+            if (result != 0) {
+                fprintf(stderr, "USB OUT request error on device %d: %d\n",
+                        ctx->device_index + 1, result);
+                continue;  /* Non-fatal, retry */
+            }
+
+            /* Write received data to USB device */
+            if (actual_len > 0) {
+                int transferred = 0;
+
+                result = usb_transfer_bulk_write(
+                    device,
+                    device->config.bulk_out_endpoint,
+                    out_buffer,
+                    (int)actual_len,
+                    &transferred,
+                    device->config.transfer_timeout_ms
+                );
+
+                if (result != 0) {
+                    fprintf(stderr, "USB OUT write error on device %d: %d\n",
+                            ctx->device_index + 1, result);
+
+                    pthread_mutex_lock(&client->lock);
+                    client->transfer_errors++;
+                    pthread_mutex_unlock(&client->lock);
+
+                    continue;
+                }
+
+                printf("Device %d: Wrote %d bytes to USB OUT endpoint\n",
+                       ctx->device_index + 1, transferred);
+            }
+        }
+
+        /* If no endpoints configured, sleep briefly */
+        if (device->config.bulk_in_endpoint == USB_NO_ENDPOINT &&
+            device->config.bulk_out_endpoint == USB_NO_ENDPOINT) {
             usleep(100000);  /* 100ms */
         }
     }
