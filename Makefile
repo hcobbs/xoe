@@ -4,6 +4,10 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g -std=c89 -pedantic -DTLS_ENABLED=1
 
+# Address Sanitizer flags (enabled with make asan or make test-asan)
+ASAN_FLAGS = -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer
+ASAN_CFLAGS = $(CFLAGS) $(ASAN_FLAGS)
+
 # Directories
 SRCDIR   = src
 BINDIR   = bin
@@ -193,3 +197,21 @@ clean:
 	@echo "Cleaning up build files..."
 	-rm -rf $(OBJDIR) $(BINDIR)
 	@echo "Done."
+
+# Address Sanitizer build targets
+.PHONY: asan
+asan: clean
+	@echo "Building with Address Sanitizer..."
+	@$(MAKE) all CFLAGS="$(ASAN_CFLAGS)" LIBS="$(LIBS) $(ASAN_FLAGS)"
+
+.PHONY: test-asan
+test-asan: clean
+	@echo "Building and testing with Address Sanitizer..."
+	@$(MAKE) test CFLAGS="$(ASAN_CFLAGS)" LIBS="$(LIBS) $(ASAN_FLAGS)"
+
+.PHONY: test-leaks
+test-leaks: test-asan
+	@echo ""
+	@echo "=== Memory Leak Detection Report ==="
+	@echo "Tests completed with Address Sanitizer enabled"
+	@echo "Check output above for any memory leaks or errors"
