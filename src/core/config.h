@@ -20,7 +20,8 @@ typedef enum {
     MODE_HELP,              /* Display help/usage information */
     MODE_SERVER,            /* Run as TCP/TLS server */
     MODE_CLIENT_STANDARD,   /* Run as standard client (stdin/stdout) */
-    MODE_CLIENT_SERIAL      /* Run as serial bridge client */
+    MODE_CLIENT_SERIAL,     /* Run as serial bridge client */
+    MODE_CLIENT_USB         /* Run as USB bridge client */
 } xoe_mode_t;
 
 /* FSM states for application flow */
@@ -32,6 +33,7 @@ typedef enum {
     STATE_SERVER_MODE,      /* Execute server mode */
     STATE_CLIENT_STD,       /* Execute standard client mode */
     STATE_CLIENT_SERIAL,    /* Execute serial bridge client mode */
+    STATE_CLIENT_USB,       /* Execute USB bridge client mode */
     STATE_CLEANUP,          /* Cleanup resources */
     STATE_EXIT              /* Exit application */
 } xoe_state_t;
@@ -49,8 +51,11 @@ typedef struct {
     int use_serial;                     /* Serial mode flag */
     void *serial_config;                /* Opaque pointer to serial_config_t */
     char *serial_device;                /* Serial device path */
+    int use_usb;                        /* USB mode flag */
+    void *usb_config;                   /* Opaque pointer to usb_multi_config_t */
     char *program_name;                 /* Program name for usage output */
     int exit_code;                      /* Exit code for application */
+    int server_fd;                      /* Server connection file descriptor */
 } xoe_config_t;
 
 /* Forward declarations for state handler functions */
@@ -61,6 +66,7 @@ xoe_state_t state_mode_select(xoe_config_t *config);
 xoe_state_t state_server_mode(xoe_config_t *config);
 xoe_state_t state_client_std(xoe_config_t *config);
 xoe_state_t state_client_serial(xoe_config_t *config);
+xoe_state_t state_client_usb(xoe_config_t *config);
 xoe_state_t state_cleanup(xoe_config_t *config);
 
 /* Forward declarations for helper functions used by state handlers */

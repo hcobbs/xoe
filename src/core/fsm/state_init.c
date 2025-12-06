@@ -11,8 +11,10 @@
 #include "core/config.h"
 #include "lib/common/definitions.h"
 #include "connectors/serial/serial_config.h"
+#include "connectors/usb/usb_config.h"
 
 #if TLS_ENABLED
+#include "lib/security/tls_config.h"
 #include "lib/security/tls_context.h"
 #endif
 
@@ -49,6 +51,19 @@ xoe_state_t state_init(xoe_config_t *config) {
         return STATE_CLEANUP;
     }
     serial_config_init_defaults((serial_config_t*)config->serial_config);
+
+    /* Initialize USB configuration */
+    config->use_usb = FALSE;
+    config->usb_config = usb_multi_config_init(USB_MAX_DEVICES);
+    if (config->usb_config == NULL) {
+        fprintf(stderr, "Error: Failed to allocate USB configuration\n");
+        free(config->serial_config);
+        config->exit_code = EXIT_FAILURE;
+        return STATE_CLEANUP;
+    }
+
+    /* Initialize connection file descriptor */
+    config->server_fd = -1;
 
 #if TLS_ENABLED
     /* Initialize TLS configuration with default paths */

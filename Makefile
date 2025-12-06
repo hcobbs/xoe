@@ -2,7 +2,7 @@
 
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -g -std=c89 -pedantic
+CFLAGS = -Wall -Wextra -g -std=c89 -pedantic -DTLS_ENABLED=1
 
 # Directories
 SRCDIR   = src
@@ -36,7 +36,7 @@ LIBS =
 UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Linux)
-    LIBS += -lpthread -lssl -lcrypto
+    LIBS += -lpthread -lssl -lcrypto -lusb-1.0
 endif
 ifeq ($(UNAME_S),Darwin) # macOS
     LIBS += -lpthread
@@ -50,6 +50,29 @@ ifeq ($(UNAME_S),Darwin) # macOS
         # Fall back to system LibreSSL
         LIBS += -lssl -lcrypto
     endif
+    # Add libusb-1.0 (usually from Homebrew)
+    HOMEBREW_LIBUSB := $(shell brew --prefix libusb 2>/dev/null)
+    ifneq ($(HOMEBREW_LIBUSB),)
+        INCLUDES += -I$(HOMEBREW_LIBUSB)/include/libusb-1.0
+        LIBS += -L$(HOMEBREW_LIBUSB)/lib -lusb-1.0
+    else
+        LIBS += -lusb-1.0
+    endif
+endif
+ifeq ($(UNAME_S),FreeBSD)
+    LIBS += -lpthread -lssl -lcrypto -lusb
+    INCLUDES += -I/usr/local/include
+    LIBS += -L/usr/local/lib
+endif
+ifeq ($(UNAME_S),OpenBSD)
+    LIBS += -lpthread -lssl -lcrypto -lusb-1.0
+    INCLUDES += -I/usr/local/include
+    LIBS += -L/usr/local/lib
+endif
+ifeq ($(UNAME_S),NetBSD)
+    LIBS += -lpthread -lssl -lcrypto -lusb-1.0
+    INCLUDES += -I/usr/pkg/include
+    LIBS += -L/usr/pkg/lib
 endif
 
 # Default target
