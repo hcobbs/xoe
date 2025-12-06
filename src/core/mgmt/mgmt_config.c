@@ -1,4 +1,5 @@
 #include "mgmt_config.h"
+#include "lib/common/definitions.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -14,14 +15,16 @@
 /* Helper function to copy string (handles NULL) */
 static char* copy_string(const char *src) {
     char *dst;
+    size_t len;
     if (src == NULL) {
         return NULL;
     }
-    dst = (char*)malloc(strlen(src) + 1);
+    len = strlen(src);
+    dst = (char*)malloc(len + 1);
     if (dst == NULL) {
         return NULL;
     }
-    strcpy(dst, src);
+    memcpy(dst, src, len + 1);  /* Safe: explicit size prevents overflow */
     return dst;
 }
 
@@ -50,18 +53,36 @@ static int copy_config(xoe_config_t *dst, const xoe_config_t *src) {
     dst->exit_code = src->exit_code;
     dst->server_fd = src->server_fd;
 
-    /* Copy string fields */
+    /* Copy string fields with rollback on allocation failure */
     free_string(&dst->listen_address);
     dst->listen_address = copy_string(src->listen_address);
+    if (src->listen_address != NULL && dst->listen_address == NULL) {
+        return E_OUT_OF_MEMORY;
+    }
 
     free_string(&dst->connect_server_ip);
     dst->connect_server_ip = copy_string(src->connect_server_ip);
+    if (src->connect_server_ip != NULL && dst->connect_server_ip == NULL) {
+        free_string(&dst->listen_address);
+        return E_OUT_OF_MEMORY;
+    }
 
     free_string(&dst->serial_device);
     dst->serial_device = copy_string(src->serial_device);
+    if (src->serial_device != NULL && dst->serial_device == NULL) {
+        free_string(&dst->listen_address);
+        free_string(&dst->connect_server_ip);
+        return E_OUT_OF_MEMORY;
+    }
 
     free_string(&dst->program_name);
     dst->program_name = copy_string(src->program_name);
+    if (src->program_name != NULL && dst->program_name == NULL) {
+        free_string(&dst->listen_address);
+        free_string(&dst->connect_server_ip);
+        free_string(&dst->serial_device);
+        return E_OUT_OF_MEMORY;
+    }
 
     /* Copy fixed-size arrays */
     memcpy(dst->cert_path, src->cert_path, TLS_CERT_PATH_MAX);
@@ -208,6 +229,8 @@ int mgmt_config_apply_pending(mgmt_config_manager_t *mgr) {
  * Clear pending configuration
  */
 void mgmt_config_clear_pending(mgmt_config_manager_t *mgr) {
+    int result;
+
     if (mgr == NULL) {
         return;
     }
@@ -215,7 +238,12 @@ void mgmt_config_clear_pending(mgmt_config_manager_t *mgr) {
     pthread_mutex_lock(&mgr->mutex);
 
     /* Copy active to pending (discard changes) */
-    copy_config(&mgr->pending, &mgr->active);
+    result = copy_config(&mgr->pending, &mgr->active);
+    if (result != 0) {
+        fprintf(stderr, "Warning: Failed to clear pending config (out of memory)\n");
+        /* Note: Pending config may be in inconsistent state.
+         * Clear flag anyway to prevent use of partial config. */
+    }
 
     /* Clear pending flag */
     mgr->has_pending = 0;
@@ -241,7 +269,13 @@ int mgmt_config_validate_pending(mgmt_config_manager_t *mgr,
     temp_config.connect_server_ip = NULL;
     temp_config.serial_device = NULL;
     temp_config.program_name = NULL;
-    copy_config(&temp_config, &mgr->pending);
+
+    if (copy_config(&temp_config, &mgr->pending) != 0) {
+        pthread_mutex_unlock(&mgr->mutex);
+        snprintf(error_buf, error_buf_size,
+                 "Out of memory while validating configuration");
+        return -1;
+    }
 
     pthread_mutex_unlock(&mgr->mutex);
 

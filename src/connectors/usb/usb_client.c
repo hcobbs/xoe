@@ -70,12 +70,15 @@ usb_client_t* usb_client_init(const char* server_ip,
     memset(client, 0, sizeof(usb_client_t));
 
     /* Copy server information */
-    client->server_ip = (char*)malloc(strlen(server_ip) + 1);
-    if (client->server_ip == NULL) {
-        free(client);
-        return NULL;
+    {
+        size_t ip_len = strlen(server_ip);
+        client->server_ip = (char*)malloc(ip_len + 1);
+        if (client->server_ip == NULL) {
+            free(client);
+            return NULL;
+        }
+        memcpy(client->server_ip, server_ip, ip_len + 1);  /* Safe: explicit size */
     }
-    strcpy(client->server_ip, server_ip);
     client->server_port = server_port;
 
     /* Allocate device array */
@@ -533,6 +536,7 @@ int usb_client_send_urb(usb_client_t* client,
     sent = send(client->socket_fd, &packet, sizeof(xoe_packet_t), 0);
     if (sent < 0) {
         fprintf(stderr, "Failed to send URB to server: %s\n", strerror(errno));
+        usb_protocol_free_payload(&packet);  /* Free allocated payload */
         return E_NETWORK_ERROR;
     }
 
@@ -542,6 +546,9 @@ int usb_client_send_urb(usb_client_t* client,
     client->packets_sent++;
 
     pthread_mutex_unlock(&client->lock);
+
+    /* Free allocated payload after successful send */
+    usb_protocol_free_payload(&packet);
 
     return 0;
 }
