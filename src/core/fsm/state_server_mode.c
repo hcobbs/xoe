@@ -19,6 +19,7 @@
 #include "core/config.h"
 #include "core/server.h"
 #include "lib/common/definitions.h"
+#include "lib/net/net_resolve.h"
 #include "connectors/usb/usb_server.h"
 
 #if TLS_ENABLED
@@ -107,17 +108,28 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
     }
 
     /* Set up address structure */
+    memset(&address, 0, sizeof(address));
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY; /* Default to all interfaces */
+    address.sin_port = htons(config->listen_port);
+
     if (config->listen_address != NULL) {
-        if (inet_pton(AF_INET, config->listen_address, &address.sin_addr) <= 0) {
-            fprintf(stderr, "Invalid listen address: %s\n", config->listen_address);
+        /* Resolve hostname/IP for bind address */
+        net_resolve_result_t resolve_result;
+        char error_buf[256];
+
+        if (net_resolve_to_sockaddr(config->listen_address, config->listen_port,
+                                    &address, &resolve_result) != 0) {
+            net_resolve_format_error(&resolve_result, error_buf, sizeof(error_buf));
+            fprintf(stderr, "Failed to resolve listen address '%s': %s\n",
+                    config->listen_address, error_buf);
             close(server_fd);
             config->exit_code = EXIT_FAILURE;
             return STATE_CLEANUP;
         }
+    } else {
+        /* Default to all interfaces */
+        address.sin_addr.s_addr = INADDR_ANY;
     }
-    address.sin_port = htons(config->listen_port);
 
     /* Bind the socket to the specified IP and port */
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
