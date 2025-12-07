@@ -34,6 +34,7 @@
 #define E_INTERRUPTED          -22  /* Operation interrupted */
 #define E_NOT_SUPPORTED        -23  /* Operation not supported */
 #define E_USB_TRANSFER_ERROR   -24  /* Generic USB transfer error */
+#define E_DNS_ERROR            -25  /* DNS resolution failed */
 
 /* USB-specific Error Definitions (start at -100) */
 #define E_USB_NOT_FOUND        -100  /* USB device not found */

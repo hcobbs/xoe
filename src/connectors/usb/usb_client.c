@@ -13,6 +13,7 @@
 #include "usb_client.h"
 #include "usb_protocol.h"
 #include "lib/common/definitions.h"
+#include "lib/net/net_resolve.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -177,39 +178,19 @@ int usb_client_add_device(usb_client_t* client,
  */
 static int usb_client_connect(usb_client_t* client)
 {
-    struct sockaddr_in server_addr;
+    net_resolve_result_t resolve_result;
+    char error_buf[256];
     int result;
 
-    /* Create socket */
-    client->socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (client->socket_fd < 0) {
-        fprintf(stderr, "Failed to create socket: %s\n", strerror(errno));
-        return E_NETWORK_ERROR;
-    }
-
-    /* Setup server address */
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons((uint16_t)client->server_port);
-
-    result = inet_pton(AF_INET, client->server_ip, &server_addr.sin_addr);
-    if (result <= 0) {
-        fprintf(stderr, "Invalid server IP address: %s\n", client->server_ip);
-        close(client->socket_fd);
-        client->socket_fd = -1;
-        return E_INVALID_ARGUMENT;
-    }
-
-    /* Connect to server */
-    result = connect(client->socket_fd,
-                     (struct sockaddr*)&server_addr,
-                     sizeof(server_addr));
-    if (result < 0) {
+    /* Resolve hostname/IP and connect to server */
+    result = net_resolve_connect(client->server_ip, client->server_port,
+                                  &client->socket_fd, &resolve_result);
+    if (result != 0) {
+        net_resolve_format_error(&resolve_result, error_buf, sizeof(error_buf));
         fprintf(stderr, "Failed to connect to %s:%d: %s\n",
-                client->server_ip, client->server_port, strerror(errno));
-        close(client->socket_fd);
+                client->server_ip, client->server_port, error_buf);
         client->socket_fd = -1;
-        return E_NETWORK_ERROR;
+        return result;
     }
 
     printf("Connected to server %s:%d\n", client->server_ip, client->server_port);

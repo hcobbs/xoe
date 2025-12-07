@@ -14,6 +14,7 @@
 
 #include "core/config.h"
 #include "lib/common/definitions.h"
+#include "lib/net/net_resolve.h"
 
 #if TLS_ENABLED
 #include "lib/security/tls_config.h"
@@ -40,38 +41,23 @@
  * This is the interactive stdin/stdout client mode (not serial bridge).
  */
 xoe_state_t state_client_std(xoe_config_t *config) {
-    int sock = 0;
-    struct sockaddr_in serv_addr;
+    int sock = -1;
     char buffer[BUFFER_SIZE] = {0};
     int bytes_received = 0;
+    net_resolve_result_t resolve_result;
+    char error_buf[256];
 #if TLS_ENABLED
     SSL_CTX* tls_ctx = NULL;
     SSL* tls = NULL;
 #endif
 
-    /* Create socket */
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("Socket creation error");
-        config->exit_code = EXIT_FAILURE;
-        return STATE_CLEANUP;
-    }
-
-    /* Setup server address structure */
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(config->connect_server_port);
-
-    /* Convert IP address from text to binary */
-    if (inet_pton(AF_INET, config->connect_server_ip, &serv_addr.sin_addr) <= 0) {
-        fprintf(stderr, "Invalid address/ Address not supported\n");
-        close(sock);
-        config->exit_code = EXIT_FAILURE;
-        return STATE_CLEANUP;
-    }
-
-    /* Connect to server */
-    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        perror("Connection Failed");
-        close(sock);
+    /* Resolve hostname/IP and connect to server */
+    if (net_resolve_connect(config->connect_server_ip,
+                            config->connect_server_port,
+                            &sock, &resolve_result) != 0) {
+        net_resolve_format_error(&resolve_result, error_buf, sizeof(error_buf));
+        fprintf(stderr, "Failed to connect to %s:%d: %s\n",
+                config->connect_server_ip, config->connect_server_port, error_buf);
         config->exit_code = EXIT_FAILURE;
         return STATE_CLEANUP;
     }
