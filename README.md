@@ -1,10 +1,10 @@
 # XOE - X over Ethernet
 
-Meet Xoe... An extensible framework for encapsulation of various new and legacy protocols into Ethernet-transmissible data.
+An extensible framework for encapsulating new and legacy protocols into Ethernet-transmissible data. Because sometimes you need to shove a serial port through a network, and nobody else was going to do it right.
 
 **Current Status**: Echo server with TLS 1.2/1.3 support
 **Version**: 1.0
-**License**: (To be determined)
+**License**: GPLv3
 
 ---
 
@@ -171,7 +171,7 @@ nc localhost 12345
 - **[docs/development/TESTING.md](docs/development/TESTING.md)** - Test framework and testing guide
 - **[docs/development/CODE_REVIEW.md](docs/development/CODE_REVIEW.md)** - Technical code review and architecture analysis
 - **[docs/development/CONTRIBUTING.md](docs/development/CONTRIBUTING.md)** - How to contribute to XOE
-- **[CLAUDE.md](CLAUDE.md)** - Project instructions for Claude Code (AI assistant)
+- **[CLAUDE.md](CLAUDE.md)** - Project instructions for Aida 🤖
 
 ---
 
@@ -325,9 +325,9 @@ All commits must include one of these labels:
 ```
 [CLASSIC] Implemented thread pool manager
 [CLASSIC-REVIEW] Fixed buffer overflow after manual code review
-[LLM-ASSISTED] Refactored TLS error handling with Claude's suggestions
+[LLM-ASSISTED] Refactored TLS error handling with Aida's suggestions
 [LLM-ARCH] Implemented serial connector based on approved design plan
-[LLM-REVIEW] Fixed memory leak identified by Claude Code analysis
+[LLM-REVIEW] Fixed memory leak identified by Aida
 [VIBE] Added experimental certificate rotation feature
 ```
 
@@ -425,7 +425,11 @@ See [docs/guides/SECURITY.md](docs/guides/SECURITY.md) for detailed security gui
 
 ## License
 
-(To be determined - please add license information)
+Copyright (c) 2025 Hunter Cobbs
+
+Licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE) for details.
+
+Use it. Modify it. Distribute it. Just keep it open.
 
 ---
 
@@ -433,7 +437,7 @@ See [docs/guides/SECURITY.md](docs/guides/SECURITY.md) for detailed security gui
 
 - OpenSSL project for TLS implementation
 - Contributors (to be listed)
-- Claude Code (Anthropic) for LLM-assisted development
+- Aida 🤖 for the heavy lifting when my patience runs thin
 
 ---
 
@@ -456,4 +460,4 @@ See [docs/guides/SECURITY.md](docs/guides/SECURITY.md) for detailed security gui
 
 ---
 
-**Built with ❤️ using Human-LLM collaboration**
+**Built with 🤖 Human-LLM collaboration. Aida did the typing. I did the thinking. Mostly.**
