@@ -1,10 +1,8 @@
 # Contributing to XOE
 
-Thank you for your interest in contributing to XOE (X over Ethernet)!
-
 ## Project Philosophy
 
-XOE is a testbed for human-LLM hybrid development. All contributions must be clearly labeled to track the development approach used.
+XOE is a testbed for human-LLM hybrid development. All contributions must be labeled to track development approach. No exceptions. If you can't be bothered to add a tag, you can't be bothered to contribute.
 
 ## Development Model
 
@@ -161,14 +159,10 @@ All pull requests undergo code review before merging:
 
 See [CODE_REVIEW.md](CODE_REVIEW.md) for detailed architecture analysis.
 
-## Questions or Help?
+## Questions
 
-- Open an issue for questions or discussion
-- Review existing documentation in [docs/](../)
-- Check [README.md](../../README.md) for project overview
+Open an issue. Read the docs first. They exist for a reason.
 
 ## License
 
-By contributing to XOE, you agree that your contributions will be licensed under the same license as the project.
-
-Thank you for contributing!
+Contributions are licensed under GPLv3. If that's a problem, this isn't the project for you.

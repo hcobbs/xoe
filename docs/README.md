@@ -1,6 +1,6 @@
 # XOE Documentation
 
-Welcome to the XOE (X over Ethernet) project documentation.
+XOE (X over Ethernet) project documentation. If you're reading this, you probably need to tunnel something ancient through something modern. Good luck.
 
 ## Quick Start
 
@@ -46,15 +46,12 @@ docs/
 
 ## Contributing to Documentation
 
-Documentation contributions are welcome! Please:
-
-1. Follow the existing structure and categorization
-2. Use clear, concise language
-3. Include code examples where appropriate
+1. Follow the existing structure
+2. Be concise. Nobody reads walls of text.
+3. Include code examples
 4. Update this index when adding new documents
 5. Follow the git workflow in [CONTRIBUTING.md](development/CONTRIBUTING.md)
 
-## Questions or Feedback?
+## Issues
 
-- Open an issue on GitHub
-- See [CONTRIBUTING.md](development/CONTRIBUTING.md) for more information
+Open a GitHub issue. Read [CONTRIBUTING.md](development/CONTRIBUTING.md) first.
