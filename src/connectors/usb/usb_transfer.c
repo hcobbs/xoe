@@ -14,10 +14,11 @@
 #include "lib/common/definitions.h"
 #include <stdlib.h>
 #include <string.h>
-
-#ifndef _WIN32
 #include <sys/time.h>
 #include <errno.h>
+
+/* ETIMEDOUT fallback only for systems that don't define it in errno.h */
+#ifndef ETIMEDOUT
 #define ETIMEDOUT 110
 #endif
 
@@ -264,11 +265,7 @@ static void async_transfer_callback(struct libusb_transfer* transfer)
     }
 
     /* Lock context */
-#ifdef _WIN32
-    EnterCriticalSection(&ctx->lock);
-#else
     pthread_mutex_lock(&ctx->lock);
-#endif
 
     /* Mark as completed */
     ctx->completed = TRUE;
@@ -279,13 +276,8 @@ static void async_transfer_callback(struct libusb_transfer* transfer)
     ctx->urb_header.status = transfer->status;
 
     /* Signal completion */
-#ifdef _WIN32
-    SetEvent(ctx->event);
-    LeaveCriticalSection(&ctx->lock);
-#else
     pthread_cond_signal(&ctx->cond);
     pthread_mutex_unlock(&ctx->lock);
-#endif
 }
 
 /**
@@ -315,19 +307,8 @@ usb_transfer_ctx_t* usb_transfer_alloc(void)
     }
 
     /* Initialize synchronization primitives */
-#ifdef _WIN32
-    InitializeCriticalSection(&ctx->lock);
-    ctx->event = CreateEvent(NULL, FALSE, FALSE, NULL);
-    if (ctx->event == NULL) {
-        libusb_free_transfer(ctx->transfer);
-        DeleteCriticalSection(&ctx->lock);
-        free(ctx);
-        return NULL;
-    }
-#else
     pthread_mutex_init(&ctx->lock, NULL);
     pthread_cond_init(&ctx->cond, NULL);
-#endif
 
     return ctx;
 }
@@ -347,15 +328,8 @@ void usb_transfer_free(usb_transfer_ctx_t* ctx)
     }
 
     /* Destroy synchronization primitives */
-#ifdef _WIN32
-    if (ctx->event != NULL) {
-        CloseHandle(ctx->event);
-    }
-    DeleteCriticalSection(&ctx->lock);
-#else
     pthread_mutex_destroy(&ctx->lock);
     pthread_cond_destroy(&ctx->cond);
-#endif
 
     /* Free context */
     free(ctx);
@@ -379,21 +353,12 @@ int usb_transfer_async_submit(usb_device_t* dev,
     }
 
     /* Reset completion state */
-#ifdef _WIN32
-    EnterCriticalSection(&ctx->lock);
-#else
     pthread_mutex_lock(&ctx->lock);
-#endif
 
     ctx->completed = FALSE;
     ctx->result = 0;
 
-#ifdef _WIN32
-    ResetEvent(ctx->event);
-    LeaveCriticalSection(&ctx->lock);
-#else
     pthread_mutex_unlock(&ctx->lock);
-#endif
 
     /* Fill transfer structure */
     libusb_fill_bulk_transfer(
@@ -431,10 +396,8 @@ int usb_transfer_async_wait(usb_transfer_ctx_t* ctx,
                              unsigned int timeout_ms)
 {
     int result;
-#ifndef _WIN32
     struct timespec ts;
     struct timeval now;
-#endif
 
     /* Validate parameters */
     if (ctx == NULL) {
@@ -442,29 +405,10 @@ int usb_transfer_async_wait(usb_transfer_ctx_t* ctx,
     }
 
     /* Lock context */
-#ifdef _WIN32
-    EnterCriticalSection(&ctx->lock);
-#else
     pthread_mutex_lock(&ctx->lock);
-#endif
 
     /* Wait for completion */
     while (!ctx->completed) {
-#ifdef _WIN32
-        LeaveCriticalSection(&ctx->lock);
-        result = WaitForSingleObject(ctx->event,
-                                      timeout_ms == 0 ? INFINITE : timeout_ms);
-        EnterCriticalSection(&ctx->lock);
-
-        if (result == WAIT_TIMEOUT) {
-            LeaveCriticalSection(&ctx->lock);
-            return E_TIMEOUT;
-        }
-        if (result != WAIT_OBJECT_0) {
-            LeaveCriticalSection(&ctx->lock);
-            return E_IO_ERROR;
-        }
-#else
         if (timeout_ms == 0) {
             /* Wait indefinitely */
             pthread_cond_wait(&ctx->cond, &ctx->lock);
@@ -484,28 +428,19 @@ int usb_transfer_async_wait(usb_transfer_ctx_t* ctx,
                 return E_TIMEOUT;
             }
         }
-#endif
     }
 
     /* Check transfer result */
     if (ctx->result != LIBUSB_TRANSFER_COMPLETED) {
         result = map_libusb_error(ctx->result);
-#ifdef _WIN32
-        LeaveCriticalSection(&ctx->lock);
-#else
         pthread_mutex_unlock(&ctx->lock);
-#endif
         return result;
     }
 
     /* Get transferred bytes */
     result = (int)ctx->urb_header.actual_length;
 
-#ifdef _WIN32
-    LeaveCriticalSection(&ctx->lock);
-#else
     pthread_mutex_unlock(&ctx->lock);
-#endif
 
     return result;
 }

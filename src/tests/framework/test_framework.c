@@ -9,6 +9,7 @@
 int tests_run = 0;
 int tests_passed = 0;
 int tests_failed = 0;
+int tests_skipped = 0;
 
 void run_test(const char* test_name, void (*test_func)(void)) {
     printf("Running: %s\n", test_name);
@@ -17,9 +18,10 @@ void run_test(const char* test_name, void (*test_func)(void)) {
 
 void print_test_summary(void) {
     printf("\n=== Test Summary ===\n");
-    printf("Tests run:    %d\n", tests_run);
-    printf("Tests passed: %d\n", tests_passed);
-    printf("Tests failed: %d\n", tests_failed);
+    printf("Tests run:     %d\n", tests_run);
+    printf("Tests passed:  %d\n", tests_passed);
+    printf("Tests failed:  %d\n", tests_failed);
+    printf("Tests skipped: %d\n", tests_skipped);
     if (tests_run > 0) {
         printf("Success rate: %.1f%%\n", (100.0 * tests_passed) / tests_run);
     } else {

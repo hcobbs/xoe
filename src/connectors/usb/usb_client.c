@@ -616,12 +616,30 @@ int usb_client_register_device(usb_client_t* client,
     }
 
     /* Wait for registration response (with timeout) */
-    /* For now, use simple blocking receive - timeout handling TBD */
-    (void)timeout_ms;  /* Unused for now */
+    /* Set socket receive timeout to prevent indefinite blocking */
+    if (timeout_ms > 0) {
+        struct timeval tv;
+        tv.tv_sec = timeout_ms / 1000;
+        tv.tv_usec = (timeout_ms % 1000) * 1000;
+        if (setsockopt(client->socket_fd, SOL_SOCKET, SO_RCVTIMEO,
+                       &tv, sizeof(tv)) < 0) {
+            fprintf(stderr, "Warning: failed to set socket timeout\n");
+        }
+    }
 
     response_len = 0;
     result = usb_client_receive_urb(client, &response_urb, NULL,
                                      &response_len);
+
+    /* Restore socket to blocking mode (no timeout) after receive */
+    if (timeout_ms > 0) {
+        struct timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+        setsockopt(client->socket_fd, SOL_SOCKET, SO_RCVTIMEO,
+                   &tv, sizeof(tv));
+    }
+
     if (result != 0) {
         fprintf(stderr, "Failed to receive registration response: error %d\n",
                 result);
@@ -1315,6 +1333,8 @@ void usb_client_free_pending_request(
         prev = curr;
         curr = curr->next;
     }
+    /* Suppress -Wunused-but-set-variable when request not found in list */
+    (void)prev;
 
     pthread_mutex_unlock(&client->pending_lock);
 
@@ -1369,6 +1389,8 @@ int usb_client_cleanup_timeouts(usb_client_t* client)
         prev = request;
         request = next;
     }
+    /* Suppress -Wunused-but-set-variable (prev reserved for future removal logic) */
+    (void)prev;
 
     pthread_mutex_unlock(&client->pending_lock);
 

@@ -26,11 +26,20 @@ void test_tls_read_null_session(void) {
  *
  * Verifies that tls_read() returns error when given NULL buffer.
  * Note: Requires a valid SSL session which we cannot easily create in unit test.
+ * This test is skipped because creating a valid SSL session requires network
+ * infrastructure (TCP connection, TLS handshake) which belongs in integration tests.
  */
 void test_tls_read_null_buffer(void) {
-    /* This test would require a valid SSL session */
-    /* Skipping for now as it requires network setup */
-    TEST_ASSERT(1, "TLS read NULL buffer test placeholder");
+    /*
+     * Cannot unit test: requires valid SSL session to pass the NULL ssl check
+     * before we can test the NULL buffer check. The implementation checks:
+     *   if (ssl == NULL || buffer == NULL) { return -1; }
+     * To test the buffer==NULL branch, we need ssl!=NULL, which requires
+     * a completed TLS handshake over a real network connection.
+     *
+     * Candidate for integration test: scripts/test_integration.sh
+     */
+    TEST_SKIP("Requires valid SSL session (integration test candidate)");
 }
 
 /**
@@ -49,23 +58,43 @@ void test_tls_write_null_session(void) {
  *
  * Verifies that tls_write() returns error when given NULL buffer.
  * Note: Requires a valid SSL session which we cannot easily create in unit test.
+ * This test is skipped because creating a valid SSL session requires network
+ * infrastructure (TCP connection, TLS handshake) which belongs in integration tests.
  */
 void test_tls_write_null_buffer(void) {
-    /* This test would require a valid SSL session */
-    /* Skipping for now as it requires network setup */
-    TEST_ASSERT(1, "TLS write NULL buffer test placeholder");
+    /*
+     * Cannot unit test: requires valid SSL session to pass the NULL ssl check
+     * before we can test the NULL buffer check. The implementation checks:
+     *   if (ssl == NULL || buffer == NULL) { return -1; }
+     * To test the buffer==NULL branch, we need ssl!=NULL, which requires
+     * a completed TLS handshake over a real network connection.
+     *
+     * Candidate for integration test: scripts/test_integration.sh
+     */
+    TEST_SKIP("Requires valid SSL session (integration test candidate)");
 }
 
 /**
  * @brief Test TLS write with zero length
  *
  * Verifies that tls_write() handles zero-length writes appropriately.
+ * Note: Requires a valid SSL session which we cannot easily create in unit test.
+ * This test is skipped because creating a valid SSL session requires network
+ * infrastructure (TCP connection, TLS handshake) which belongs in integration tests.
  */
 void test_tls_write_zero_length(void) {
-    const char* data = "test";
-    /* Cannot test without valid session */
-    /* This is a placeholder for integration testing */
-    TEST_ASSERT(1, "TLS write zero length test placeholder");
+    /*
+     * Cannot unit test: requires valid SSL session.
+     * The implementation behavior for len <= 0 is to return 0 immediately,
+     * but only after checking ssl != NULL first. Without a valid session,
+     * we hit the NULL check before the length check.
+     *
+     * Expected behavior (from tls_io.c):
+     *   if (len <= 0) { return 0; }
+     *
+     * Candidate for integration test: scripts/test_integration.sh
+     */
+    TEST_SKIP("Requires valid SSL session (integration test candidate)");
 }
 
 /**

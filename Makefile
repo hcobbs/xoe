@@ -30,6 +30,9 @@ OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))
 # Include paths (simplified to single -Isrc)
 INCLUDES = -I$(SRCDIR)
 
+# System includes (for third-party libraries to suppress C89 warnings)
+SYSINCLUDES =
+
 # Target executable
 TARGET_NAME = xoe
 TARGET = $(BINDIR)/$(TARGET_NAME)
@@ -48,17 +51,17 @@ ifeq ($(UNAME_S),Darwin) # macOS
     # Check for Homebrew OpenSSL installation
     HOMEBREW_OPENSSL := $(shell brew --prefix openssl 2>/dev/null)
     ifneq ($(HOMEBREW_OPENSSL),)
-        # Use Homebrew OpenSSL
-        INCLUDES += -I$(HOMEBREW_OPENSSL)/include
+        # Use Homebrew OpenSSL (use -isystem to suppress C89 warnings from headers)
+        SYSINCLUDES += -isystem $(HOMEBREW_OPENSSL)/include
         LIBS += -L$(HOMEBREW_OPENSSL)/lib -lssl -lcrypto
     else
         # Fall back to system LibreSSL
         LIBS += -lssl -lcrypto
     endif
-    # Add libusb-1.0 (usually from Homebrew)
+    # Add libusb-1.0 (usually from Homebrew, use -isystem to suppress C89 warnings)
     HOMEBREW_LIBUSB := $(shell brew --prefix libusb 2>/dev/null)
     ifneq ($(HOMEBREW_LIBUSB),)
-        INCLUDES += -I$(HOMEBREW_LIBUSB)/include/libusb-1.0
+        SYSINCLUDES += -isystem $(HOMEBREW_LIBUSB)/include/libusb-1.0
         LIBS += -L$(HOMEBREW_LIBUSB)/lib -lusb-1.0
     else
         LIBS += -lusb-1.0
@@ -92,9 +95,10 @@ $(TARGET): $(OBJECTS)
 
 # Pattern rule to compile all source files
 # Object files maintain directory structure under obj/
+# Note: $(SYSINCLUDES) must come BEFORE $(INCLUDES) to suppress third-party warnings
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
+	$(CC) $(CFLAGS) $(SYSINCLUDES) $(INCLUDES) -c $< -o $@
 
 # Test configuration
 TEST_FRAMEWORK = $(TESTDIR)/framework/test_framework.c
@@ -183,13 +187,13 @@ check: all test-build
 # Pattern rule for test binaries
 $(BINDIR)/test_%: $(TESTDIR)/unit/test_%.c $(TEST_FRAMEWORK_OBJ) $(APP_TEST_OBJECTS)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -I$(TESTDIR) $< $(TEST_FRAMEWORK_OBJ) $(APP_TEST_OBJECTS) -o $@ $(LIBS)
+	$(CC) $(CFLAGS) $(SYSINCLUDES) $(INCLUDES) -I$(TESTDIR) $< $(TEST_FRAMEWORK_OBJ) $(APP_TEST_OBJECTS) -o $@ $(LIBS)
 	@echo "Built test: $@"
 
 # Compile test framework object
 $(TEST_FRAMEWORK_OBJ): $(TEST_FRAMEWORK)
 	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(INCLUDES) -I$(TESTDIR) -c $< -o $@
+	$(CC) $(CFLAGS) $(SYSINCLUDES) $(INCLUDES) -I$(TESTDIR) -c $< -o $@
 
 # Rule to clean up build artifacts
 .PHONY: clean
