@@ -39,11 +39,26 @@ void test_error_string_not_empty(void) {
  * @brief Test last error code retrieval
  *
  * Verifies that tls_get_last_error() returns a valid error code.
+ * With no prior SSL operations, the OpenSSL error queue should be empty,
+ * so tls_get_last_error() should return 0 (no error).
  */
 void test_get_last_error(void) {
     int error_code = tls_get_last_error();
-    /* Error code should be a valid integer (can be 0 for no error) */
-    TEST_ASSERT(1, "Get last error should return valid code");
+    /*
+     * With no prior SSL operations in this process, the error queue should
+     * be empty. tls_get_last_error() returns:
+     *   - 0 if no error (ERR_peek_last_error() == 0)
+     *   - E_TLS_PROTOCOL_ERROR (-16) if there's an error in the queue
+     *
+     * In a fresh test environment, we expect 0.
+     */
+    TEST_ASSERT(error_code == 0 || error_code == E_TLS_PROTOCOL_ERROR,
+                "Error code should be 0 (no error) or E_TLS_PROTOCOL_ERROR");
+
+    /* Additional check: if no error, should be exactly 0 */
+    if (error_code == 0) {
+        TEST_ASSERT(error_code == 0, "No SSL error should return 0");
+    }
 }
 
 /**

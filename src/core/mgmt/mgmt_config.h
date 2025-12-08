@@ -21,8 +21,11 @@
  * Maintains two independent configuration instances:
  * - active: Currently running configuration (read by operational threads)
  * - pending: Staged configuration for next restart (modified by management)
+ *
+ * Note: Named struct allows forward declaration in config.h as
+ * "struct mgmt_config_manager_t" while typedef provides convenience name.
  */
-typedef struct {
+typedef struct mgmt_config_manager_t {
     xoe_config_t active;       /* Currently running configuration */
     xoe_config_t pending;      /* Staged configuration for next restart */
     int has_pending;           /* Flag: 1 if pending differs from active */

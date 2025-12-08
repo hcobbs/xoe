@@ -15,6 +15,7 @@
 extern int tests_run;
 extern int tests_passed;
 extern int tests_failed;
+extern int tests_skipped;
 
 /**
  * @brief Assert that a condition is true
@@ -133,6 +134,20 @@ extern int tests_failed;
  */
 #define TEST_ASSERT_ERROR(result, error_code, message) \
     TEST_ASSERT((result) == (error_code), message)
+
+/**
+ * @brief Skip a test with a reason
+ *
+ * Increments skip counter and prints skip message.
+ * Use when a test cannot run due to missing prerequisites.
+ *
+ * @param reason Explanation of why the test is skipped
+ */
+#define TEST_SKIP(reason) \
+    do { \
+        printf("SKIP: %s:%d - %s\n", __FILE__, __LINE__, reason); \
+        tests_skipped++; \
+    } while (0)
 
 /**
  * @brief Run a test function
