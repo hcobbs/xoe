@@ -1287,7 +1287,8 @@ int usb_client_complete_pending_request(
         return E_INVALID_ARGUMENT;
     }
 
-    /* Find request in pending queue */
+    /* Find request in pending queue (USB-004 race fix) */
+    /* Hold pending_lock while acquiring request->mutex to prevent free */
     pthread_mutex_lock(&client->pending_lock);
 
     request = client->pending_head;
@@ -1299,14 +1300,16 @@ int usb_client_complete_pending_request(
         request = request->next;
     }
 
-    pthread_mutex_unlock(&client->pending_lock);
-
     if (!found) {
+        pthread_mutex_unlock(&client->pending_lock);
         return E_NOT_FOUND;
     }
 
-    /* Copy response data */
+    /* Lock request while still holding pending_lock (prevents race) */
     pthread_mutex_lock(&request->mutex);
+    pthread_mutex_unlock(&client->pending_lock);
+
+    /* Copy response data (now safe, we hold request->mutex) */
 
     if (data != NULL && data_len > 0 && request->response_data != NULL) {
         uint32_t copy_len = (data_len < request->response_size) ?

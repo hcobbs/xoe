@@ -2,6 +2,7 @@
 #include "mgmt_internal.h"
 #include "mgmt_commands.h"
 #include "core/config.h"
+#include "lib/security/password_hash.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,7 +37,7 @@
 struct mgmt_server_t {
     int listen_fd;              /* Listening socket */
     int port;                   /* Listen port */
-    char password[MGMT_PASSWORD_MAX]; /* Password buffer (static) */
+    char password_hash[PASSWORD_HEX_LEN]; /* Hashed password (never plaintext) */
     int password_enabled;       /* Authentication required flag */
     pthread_t listener_thread;  /* Listener thread ID */
     volatile sig_atomic_t shutdown_flag; /* Shutdown signal */
@@ -74,14 +75,17 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
     /* Initialize fields */
     server->listen_fd = -1;
     server->port = config->mgmt_port;
-    server->password[0] = '\0';
+    server->password_hash[0] = '\0';
     server->password_enabled = 0;
     server->shutdown_flag = 0;
 
-    /* Copy password if provided (with bounds checking) */
-    if (config->mgmt_password != NULL) {
-        strncpy(server->password, config->mgmt_password, MGMT_PASSWORD_MAX - 1);
-        server->password[MGMT_PASSWORD_MAX - 1] = '\0';
+    /* Hash password if provided (never store plaintext) */
+    if (config->mgmt_password != NULL && config->mgmt_password[0] != '\0') {
+        if (password_hash(config->mgmt_password, server->password_hash) != 0) {
+            fprintf(stderr, "Failed to hash management password\n");
+            free(server);
+            return NULL;
+        }
         server->password_enabled = 1;
     }
 
@@ -91,8 +95,8 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
         server->sessions[i].in_use = 0;
         server->sessions[i].socket_fd = -1;
         server->sessions[i].authenticated = 0;
-        /* Copy password to each session's isolated buffer */
-        strncpy(server->sessions[i].password, server->password, MGMT_PASSWORD_MAX - 1);
+        /* Copy hashed password to each session's isolated buffer */
+        strncpy(server->sessions[i].password, server->password_hash, MGMT_PASSWORD_MAX - 1);
         server->sessions[i].password[MGMT_PASSWORD_MAX - 1] = '\0';
         /* Buffers are already allocated as part of the structure */
     }
@@ -334,8 +338,8 @@ static int authenticate_session(mgmt_session_t *session) {
             *newline = '\0';
         }
 
-        /* Check password */
-        if (strcmp(session->read_buffer, session->password) == 0) {
+        /* Verify password against stored hash (constant-time comparison) */
+        if (password_verify(session->read_buffer, session->password) == 1) {
             const char *success = "Authentication successful\n\n";
             write(session->socket_fd, success, strlen(success));
             session->authenticated = 1;

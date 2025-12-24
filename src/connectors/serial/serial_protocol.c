@@ -13,9 +13,8 @@
 
 #include <stdlib.h>
 #include <string.h>
-
-/* Internal helper functions */
-static uint32_t calculate_simple_checksum(const void* data, uint32_t len);
+#include <zlib.h>
+#include <arpa/inet.h>  /* htons, ntohs for endianness conversion */
 
 /**
  * @brief Encapsulate serial data into XOE packet
@@ -54,10 +53,10 @@ int serial_protocol_encapsulate(const void* data, uint32_t len,
         return E_OUT_OF_MEMORY;
     }
 
-    /* Build serial header */
+    /* Build serial header (LIB-003 fix: network byte order) */
     header = (serial_header_t*)payload_data;
-    header->flags = flags;
-    header->sequence = sequence;
+    header->flags = htons(flags);
+    header->sequence = htons(sequence);
 
     /* Copy serial data after header */
     if (len > 0) {
@@ -129,9 +128,9 @@ int serial_protocol_decapsulate(const xoe_packet_t* packet,
         return E_BUFFER_TOO_SMALL;
     }
 
-    /* Extract sequence and flags */
-    *sequence = header->sequence;
-    *flags = header->flags;
+    /* Extract sequence and flags (LIB-003 fix: convert from network byte order) */
+    *sequence = ntohs(header->sequence);
+    *flags = ntohs(header->flags);
     *actual_len = data_len;
 
     /* Copy data to output buffer */
@@ -149,18 +148,23 @@ uint32_t serial_protocol_checksum(const xoe_packet_t* packet)
 {
     uint32_t checksum = 0;
 
+    uint8_t header_bytes[4];
+
     if (packet == NULL || packet->payload == NULL ||
         packet->payload->data == NULL) {
         return 0;
     }
 
-    /* Simple checksum: sum of all bytes in payload */
-    checksum = calculate_simple_checksum(packet->payload->data,
-                                         packet->payload->len);
+    /* Build header bytes for CRC calculation (SER-001 fix) */
+    header_bytes[0] = (uint8_t)(packet->protocol_id >> 8);
+    header_bytes[1] = (uint8_t)(packet->protocol_id);
+    header_bytes[2] = (uint8_t)(packet->protocol_version >> 8);
+    header_bytes[3] = (uint8_t)(packet->protocol_version);
 
-    /* Include protocol ID and version in checksum */
-    checksum += packet->protocol_id;
-    checksum += packet->protocol_version;
+    /* CRC32 over header fields + payload */
+    checksum = (uint32_t)crc32(0L, header_bytes, 4);
+    checksum = (uint32_t)crc32(checksum, (const Bytef*)packet->payload->data,
+                               packet->payload->len);
 
     return checksum;
 }
@@ -208,31 +212,4 @@ void serial_protocol_free_payload(xoe_packet_t* packet)
         free(packet->payload);
         packet->payload = NULL;
     }
-}
-
-/**
- * @brief Calculate simple checksum over data buffer
- *
- * Computes a simple sum of all bytes in the buffer. This provides
- * basic error detection. Can be upgraded to CRC32 if needed.
- *
- * @param data Pointer to data buffer
- * @param len Length of data in bytes
- * @return Checksum value
- */
-static uint32_t calculate_simple_checksum(const void* data, uint32_t len)
-{
-    const unsigned char* bytes = (const unsigned char*)data;
-    uint32_t checksum = 0;
-    uint32_t i;
-
-    if (data == NULL || len == 0) {
-        return 0;
-    }
-
-    for (i = 0; i < len; i++) {
-        checksum += bytes[i];
-    }
-
-    return checksum;
 }

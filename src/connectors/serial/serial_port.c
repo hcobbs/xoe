@@ -46,17 +46,73 @@ int serial_config_init_defaults(serial_config_t* config)
 }
 
 /**
+ * @brief Validate device path for security (SER-002, FSM-003 fix)
+ *
+ * Ensures the device path is safe and refers to an actual device:
+ * - Must be absolute (start with /)
+ * - Must be under /dev/
+ * - Must not contain path traversal components (..)
+ * - Must not be excessively long
+ */
+static int validate_device_path(const char* path)
+{
+    const char* p;
+    size_t len;
+
+    if (path == NULL || path[0] == '\0') {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Check path length */
+    len = strlen(path);
+    if (len >= SERIAL_DEVICE_PATH_MAX) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Must be absolute path */
+    if (path[0] != '/') {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Must start with /dev/ */
+    if (len < 5 || strncmp(path, "/dev/", 5) != 0) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Check for path traversal attempts */
+    p = path;
+    while (*p != '\0') {
+        /* Check for .. component */
+        if (p[0] == '.' && p[1] == '.') {
+            /* Check if it's a path component (preceded by / or start) */
+            if (p == path || p[-1] == '/') {
+                /* Check if followed by / or end */
+                if (p[2] == '/' || p[2] == '\0') {
+                    return E_INVALID_ARGUMENT;
+                }
+            }
+        }
+        p++;
+    }
+
+    return 0;
+}
+
+/**
  * @brief Validate serial configuration parameters
  */
 int serial_config_validate(const serial_config_t* config)
 {
+    int result;
+
     if (config == NULL) {
         return E_INVALID_ARGUMENT;
     }
 
-    /* Validate device path */
-    if (config->device_path[0] == '\0') {
-        return E_INVALID_ARGUMENT;
+    /* Validate device path for security */
+    result = validate_device_path(config->device_path);
+    if (result != 0) {
+        return result;
     }
 
     /* Validate baud rate */
