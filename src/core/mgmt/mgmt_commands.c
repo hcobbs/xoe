@@ -55,12 +55,12 @@ static const cmd_entry_t commands[] = {
     {NULL, NULL, NULL}
 };
 
-/* Helper: Send string to session */
+/* Helper: Send string to session (using TLS if enabled - FSM-006 fix) */
 static void send_str(mgmt_session_t *session, const char *str) {
-    write(session->socket_fd, str, strlen(str));
+    mgmt_write(session, str, strlen(str));
 }
 
-/* Helper: Send formatted string */
+/* Helper: Send formatted string (using TLS if enabled - FSM-006 fix) */
 static void send_fmt(mgmt_session_t *session, const char *fmt, ...) {
     va_list args;
     int len;
@@ -70,7 +70,7 @@ static void send_fmt(mgmt_session_t *session, const char *fmt, ...) {
     va_end(args);
 
     if (len > 0 && len < MGMT_BUFFER_SIZE) {
-        write(session->socket_fd, session->write_buffer, len);
+        mgmt_write(session, session->write_buffer, len);
     }
 }
 
@@ -118,8 +118,9 @@ void mgmt_command_loop(mgmt_session_t *session) {
     while (1) {
         send_str(session, prompt);
 
-        bytes_read = read(session->socket_fd, session->read_buffer,
-                         MGMT_BUFFER_SIZE - 1);
+        /* Read command (using TLS if enabled - FSM-006 fix) */
+        bytes_read = mgmt_read(session, session->read_buffer,
+                              MGMT_BUFFER_SIZE - 1);
         if (bytes_read <= 0) {
             break;
         }

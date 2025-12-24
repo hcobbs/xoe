@@ -53,6 +53,15 @@
 #define SERIAL_BAUD_230400 230400
 
 /**
+ * @brief Validate baud rate against whitelist (FSM-002, SER-002 fix)
+ * @param baud_rate Baud rate to validate
+ * @return 0 if valid, -1 if invalid
+ *
+ * Only standard baud rates are accepted: 9600, 19200, 38400, 57600, 115200, 230400
+ */
+int serial_validate_baud(int baud_rate);
+
+/**
  * @brief Serial port configuration structure
  *
  * Contains all configuration parameters for a serial port connection.

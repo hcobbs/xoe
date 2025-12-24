@@ -167,6 +167,14 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
                         config->exit_code = EXIT_FAILURE;
                         return STATE_CLEANUP;
                     }
+                    /* FSM-002, SER-002 fix: validate against whitelist */
+                    if (serial_validate_baud((int)baud) != 0) {
+                        fprintf(stderr, "Unsupported baud rate: %ld\n", baud);
+                        fprintf(stderr, "Valid rates: 9600, 19200, 38400, ");
+                        fprintf(stderr, "57600, 115200, 230400\n");
+                        config->exit_code = EXIT_FAILURE;
+                        return STATE_CLEANUP;
+                    }
                     serial_cfg->baud_rate = (int)baud;
                 }
                 break;
