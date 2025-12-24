@@ -15,6 +15,7 @@
 #include "connectors/serial/serial_protocol.h"
 #include "connectors/serial/serial_config.h"
 #include "lib/common/definitions.h"
+#include "lib/protocol/wire_format.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -294,26 +295,20 @@ static void* serial_to_net_thread_func(void* arg)
             }
         }
 
-        /* Send to network socket - store length before freeing payload */
-        {
-            int payload_len = (int)packet.payload->len;
-            bytes_sent = write(client->network_fd, packet.payload->data,
-                               payload_len);
+        /* Send to network socket using wire format (SER-003 fix) */
+        result = xoe_wire_send(client->network_fd, &packet);
 
-            /* Free packet payload */
-            serial_protocol_free_payload(&packet);
+        /* Free packet payload */
+        serial_protocol_free_payload(&packet);
 
-            if (bytes_sent < 0) {
-                /* Network error */
-                LOG_ERROR2("Network write failed: errno=%d: %s", errno, strerror(errno));
-                serial_client_request_shutdown(client);
-                break;
-            }
-
-            if (bytes_sent != payload_len) {
-                LOG_WARN2("Partial network write: sent %d of %d bytes", bytes_sent, payload_len);
-            }
+        if (result != 0) {
+            /* Network error */
+            LOG_ERROR1("Network write failed: error code %d", result);
+            serial_client_request_shutdown(client);
+            break;
         }
+
+        (void)bytes_sent;  /* Suppress unused warning */
     }
 
     LOG_INFO_SIMPLE("Serial→Network thread exiting");
@@ -330,9 +325,8 @@ static void* serial_to_net_thread_func(void* arg)
 static void* net_to_serial_thread_func(void* arg)
 {
     serial_client_t* client;
-    unsigned char net_buffer[SERIAL_MAX_PAYLOAD_SIZE + SERIAL_HEADER_SIZE];
     unsigned char serial_buffer[SERIAL_MAX_PAYLOAD_SIZE];
-    int bytes_received;
+    int bytes_read;
     int bytes_written;
     xoe_packet_t packet;
     uint32_t actual_len;
@@ -345,56 +339,42 @@ static void* net_to_serial_thread_func(void* arg)
     LOG_INFO_SIMPLE("Network→Serial thread started");
 
     while (!serial_client_should_shutdown(client)) {
-        /* Receive from network */
-        bytes_received = read(client->network_fd, net_buffer,
-                              sizeof(net_buffer));
+        /* Receive from network using wire format (SER-003 fix) */
+        /* xoe_wire_recv handles TCP framing and validates checksum */
+        result = xoe_wire_recv(client->network_fd, &packet);
 
-        if (bytes_received < 0) {
-            if (errno == EINTR) {
-                continue; /* Interrupted, try again */
-            }
-            /* Network error */
-            LOG_ERROR2("Network read failed: errno=%d: %s", errno, strerror(errno));
-            serial_client_request_shutdown(client);
-            break;
-        }
-
-        if (bytes_received == 0) {
-            /* Connection closed */
+        if (result == E_IO_ERROR) {
+            /* Connection closed or error */
             LOG_INFO_SIMPLE("Network connection closed by peer");
             serial_client_request_shutdown(client);
             break;
         }
 
-        /* Setup packet structure for decapsulation */
-        packet.protocol_id = XOE_PROTOCOL_SERIAL;
-        packet.protocol_version = XOE_PROTOCOL_SERIAL_VERSION;
+        if (result == E_CHECKSUM_MISMATCH) {
+            /* Corrupted packet, log and continue */
+            LOG_WARN1("Checksum mismatch on received packet, error=%d", result);
+            continue;
+        }
 
-        /* Allocate payload structure */
-        packet.payload = (xoe_payload_t*)malloc(sizeof(xoe_payload_t));
-        if (packet.payload == NULL) {
-            LOG_ERROR_SIMPLE("Memory allocation failed for payload structure");
+        if (result != 0) {
+            /* Other error */
+            LOG_ERROR1("Network receive failed: error code %d", result);
             serial_client_request_shutdown(client);
             break;
         }
 
-        packet.payload->data = net_buffer;
-        packet.payload->len = bytes_received;
-        packet.payload->owns_data = FALSE;  /* Data is stack-allocated */
-
-        /* Decapsulate */
+        /* Decapsulate serial data from XOE packet */
         result = serial_protocol_decapsulate(&packet, serial_buffer,
                                               sizeof(serial_buffer),
                                               &actual_len, &sequence,
                                               &flags);
 
-        /* Free only the payload structure, not the data (it's stack-allocated) */
-        free(packet.payload);
-        packet.payload = NULL;
+        /* Free wire format payload (allocated by xoe_wire_recv) */
+        xoe_wire_free_payload(&packet);
 
         if (result != 0) {
             /* Decapsulation error, skip packet */
-            LOG_WARN2("Packet decapsulation failed: error code %d, bytes=%d", result, bytes_received);
+            LOG_WARN1("Packet decapsulation failed: error code %d", result);
             continue;
         }
 
@@ -432,17 +412,17 @@ static void* net_to_serial_thread_func(void* arg)
         /* Read from buffer and write to serial port */
         while (serial_buffer_available(&client->rx_buffer) > 0 &&
                !serial_client_should_shutdown(client)) {
-            bytes_received = serial_buffer_read(&client->rx_buffer,
-                                                 serial_buffer,
-                                                 sizeof(serial_buffer));
+            bytes_read = serial_buffer_read(&client->rx_buffer,
+                                             serial_buffer,
+                                             sizeof(serial_buffer));
 
-            if (bytes_received <= 0) {
+            if (bytes_read <= 0) {
                 break; /* Buffer empty or closed */
             }
 
             bytes_written = serial_port_write(client->serial_fd,
                                                serial_buffer,
-                                               bytes_received);
+                                               bytes_read);
 
             if (bytes_written < 0) {
                 /* Serial write error */
@@ -452,8 +432,8 @@ static void* net_to_serial_thread_func(void* arg)
                 break;
             }
 
-            if (bytes_written != bytes_received) {
-                LOG_WARN2("Partial serial write: wrote %d of %d bytes", bytes_written, bytes_received);
+            if (bytes_written != bytes_read) {
+                LOG_WARN2("Partial serial write: wrote %d of %d bytes", bytes_written, bytes_read);
             }
         }
     }
