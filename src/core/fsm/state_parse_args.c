@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <limits.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -26,6 +28,43 @@
 #include "lib/security/tls_config.h"
 #include "lib/security/tls_context.h"
 #endif
+
+/**
+ * safe_strtol - Safe string to long conversion (FSM-001 fix)
+ * @str: String to convert
+ * @result: Output pointer for result
+ * @min: Minimum valid value
+ * @max: Maximum valid value
+ *
+ * Returns: 0 on success, -1 on error (invalid input, overflow, out of range)
+ */
+static int safe_strtol(const char *str, long *result, long min, long max) {
+    char *endptr;
+    long val;
+
+    if (str == NULL || result == NULL || *str == '\0') {
+        return -1;
+    }
+
+    errno = 0;
+    val = strtol(str, &endptr, 10);
+
+    /* Check for conversion errors */
+    if (errno == ERANGE || val < min || val > max) {
+        return -1;
+    }
+
+    /* Check for invalid characters (allow trailing whitespace) */
+    while (*endptr == ' ' || *endptr == '\t' || *endptr == '\n' || *endptr == '\r') {
+        endptr++;
+    }
+    if (*endptr != '\0') {
+        return -1;
+    }
+
+    *result = val;
+    return 0;
+}
 
 /**
  * state_parse_args - Parse command-line arguments
@@ -58,12 +97,15 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
                 break;
 
             case 'p':
-                config->listen_port = atoi(optarg);
-                if (config->listen_port <= 0 || config->listen_port > 65535) {
-                    fprintf(stderr, "Invalid port number: %s\n", optarg);
-                    print_usage(config->program_name);
-                    config->exit_code = EXIT_FAILURE;
-                    return STATE_CLEANUP;
+                {
+                    long port;
+                    if (safe_strtol(optarg, &port, 1, 65535) != 0) {
+                        fprintf(stderr, "Invalid port number: %s\n", optarg);
+                        print_usage(config->program_name);
+                        config->exit_code = EXIT_FAILURE;
+                        return STATE_CLEANUP;
+                    }
+                    config->listen_port = (int)port;
                 }
                 break;
 
@@ -77,12 +119,15 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
                 }
                 *colon = '\0';
                 config->connect_server_ip = optarg;
-                config->connect_server_port = atoi(colon + 1);
-                if (config->connect_server_port <= 0 || config->connect_server_port > 65535) {
-                    fprintf(stderr, "Invalid server port number: %s\n", colon + 1);
-                    print_usage(config->program_name);
-                    config->exit_code = EXIT_FAILURE;
-                    return STATE_CLEANUP;
+                {
+                    long port;
+                    if (safe_strtol(colon + 1, &port, 1, 65535) != 0) {
+                        fprintf(stderr, "Invalid server port number: %s\n", colon + 1);
+                        print_usage(config->program_name);
+                        config->exit_code = EXIT_FAILURE;
+                        return STATE_CLEANUP;
+                    }
+                    config->connect_server_port = (int)port;
                 }
                 break;
 
@@ -115,13 +160,14 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
 
             case 'b':
                 if (serial_cfg != NULL) {
-                    serial_cfg->baud_rate = atoi(optarg);
-                    if (serial_cfg->baud_rate <= 0) {
+                    long baud;
+                    if (safe_strtol(optarg, &baud, 1, 921600) != 0) {
                         fprintf(stderr, "Invalid baud rate: %s\n", optarg);
                         print_usage(config->program_name);
                         config->exit_code = EXIT_FAILURE;
                         return STATE_CLEANUP;
                     }
+                    serial_cfg->baud_rate = (int)baud;
                 }
                 break;
 
@@ -259,12 +305,14 @@ phase2:
                 return STATE_CLEANUP;
             }
             if (serial_cfg != NULL) {
-                serial_cfg->data_bits = atoi(argv[optind + 1]);
-                if (serial_cfg->data_bits != 7 && serial_cfg->data_bits != 8) {
+                long bits;
+                if (safe_strtol(argv[optind + 1], &bits, 7, 8) != 0 ||
+                    (bits != 7 && bits != 8)) {
                     fprintf(stderr, "Invalid data bits: %s (use 7 or 8)\n", argv[optind + 1]);
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
+                serial_cfg->data_bits = (int)bits;
             }
             optind += 2;
         } else if (strcmp(argv[optind], "--stopbits") == 0) {
@@ -275,12 +323,14 @@ phase2:
                 return STATE_CLEANUP;
             }
             if (serial_cfg != NULL) {
-                serial_cfg->stop_bits = atoi(argv[optind + 1]);
-                if (serial_cfg->stop_bits != 1 && serial_cfg->stop_bits != 2) {
+                long bits;
+                if (safe_strtol(argv[optind + 1], &bits, 1, 2) != 0 ||
+                    (bits != 1 && bits != 2)) {
                     fprintf(stderr, "Invalid stop bits: %s (use 1 or 2)\n", argv[optind + 1]);
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
+                serial_cfg->stop_bits = (int)bits;
             }
             optind += 2;
         } else if (strcmp(argv[optind], "--flow") == 0) {
@@ -315,9 +365,14 @@ phase2:
             /* Apply to most recently added USB device */
             {
                 usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
-                int interface_num = atoi(argv[optind + 1]);
+                long interface_num;
+                if (safe_strtol(argv[optind + 1], &interface_num, 0, 255) != 0) {
+                    fprintf(stderr, "Invalid interface number: %s\n", argv[optind + 1]);
+                    config->exit_code = EXIT_FAILURE;
+                    return STATE_CLEANUP;
+                }
                 if (usb_multi != NULL && usb_multi->device_count > 0) {
-                    usb_multi->devices[usb_multi->device_count - 1].interface_number = interface_num;
+                    usb_multi->devices[usb_multi->device_count - 1].interface_number = (int)interface_num;
                 } else {
                     fprintf(stderr, "Error: --interface must follow -u option\n");
                     config->exit_code = EXIT_FAILURE;

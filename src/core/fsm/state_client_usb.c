@@ -14,6 +14,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <signal.h>
 #include "core/config.h"
 #include "lib/common/definitions.h"
@@ -169,10 +170,17 @@ xoe_state_t state_client_usb(xoe_config_t *config) {
         }
     }
 
-    /* Set up signal handler for graceful shutdown */
+    /* Set up signal handler for graceful shutdown (NET-009 fix: use sigaction) */
     g_usb_client = client;
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
+    {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = signal_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(SIGINT, &sa, NULL);
+        sigaction(SIGTERM, &sa, NULL);
+    }
 
     /* Start client operation */
     printf("\nStarting USB client...\n");
