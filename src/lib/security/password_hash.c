@@ -20,6 +20,20 @@
 static const char hex_chars[] = "0123456789abcdef";
 
 /**
+ * @brief Securely clear sensitive memory (NET-015 fix)
+ *
+ * Uses volatile pointer to prevent compiler optimization from removing the clear.
+ * This is the C89-compatible approach to explicit_bzero().
+ */
+static void secure_zero(void* ptr, size_t len)
+{
+    volatile unsigned char* p = (volatile unsigned char*)ptr;
+    while (len--) {
+        *p++ = 0;
+    }
+}
+
+/**
  * @brief Generate cryptographically secure random bytes
  */
 static int generate_random_bytes(uint8_t* buffer, size_t len)
@@ -150,12 +164,15 @@ int password_hash(const char* password, char* hash_out)
     /* Generate random salt */
     result = generate_random_bytes(salt, PASSWORD_SALT_LEN);
     if (result != 0) {
+        secure_zero(salt, sizeof(salt));
         return result;
     }
 
     /* Compute hash */
     result = compute_hash(salt, password, hash);
     if (result != 0) {
+        secure_zero(salt, sizeof(salt));
+        secure_zero(hash, sizeof(hash));
         return result;
     }
 
@@ -163,6 +180,10 @@ int password_hash(const char* password, char* hash_out)
     bytes_to_hex(salt, PASSWORD_SALT_LEN, hash_out);
     bytes_to_hex(hash, PASSWORD_HASH_LEN, hash_out + (PASSWORD_SALT_LEN * 2));
     hash_out[PASSWORD_HEX_LEN - 1] = '\0';
+
+    /* Clear intermediate buffers (NET-015 fix) */
+    secure_zero(salt, sizeof(salt));
+    secure_zero(hash, sizeof(hash));
 
     return 0;
 }
@@ -173,6 +194,7 @@ int password_verify(const char* password, const char* stored_hash)
     uint8_t stored_hash_bytes[PASSWORD_HASH_LEN];
     uint8_t computed_hash[PASSWORD_HASH_LEN];
     int result;
+    int match;
     size_t hash_len;
 
     if (password == NULL || stored_hash == NULL) {
@@ -188,6 +210,7 @@ int password_verify(const char* password, const char* stored_hash)
     /* Extract salt from stored hash */
     result = hex_to_bytes(stored_hash, salt, PASSWORD_SALT_LEN);
     if (result != 0) {
+        secure_zero(salt, sizeof(salt));
         return 0; /* Invalid hex */
     }
 
@@ -195,16 +218,28 @@ int password_verify(const char* password, const char* stored_hash)
     result = hex_to_bytes(stored_hash + (PASSWORD_SALT_LEN * 2),
                           stored_hash_bytes, PASSWORD_HASH_LEN);
     if (result != 0) {
+        secure_zero(salt, sizeof(salt));
+        secure_zero(stored_hash_bytes, sizeof(stored_hash_bytes));
         return 0; /* Invalid hex */
     }
 
     /* Compute hash with same salt */
     result = compute_hash(salt, password, computed_hash);
     if (result != 0) {
+        secure_zero(salt, sizeof(salt));
+        secure_zero(stored_hash_bytes, sizeof(stored_hash_bytes));
+        secure_zero(computed_hash, sizeof(computed_hash));
         return result; /* Error */
     }
 
     /* Constant-time comparison */
-    return constant_time_compare(stored_hash_bytes, computed_hash,
+    match = constant_time_compare(stored_hash_bytes, computed_hash,
                                   PASSWORD_HASH_LEN);
+
+    /* Clear sensitive buffers (NET-015 fix) */
+    secure_zero(salt, sizeof(salt));
+    secure_zero(stored_hash_bytes, sizeof(stored_hash_bytes));
+    secure_zero(computed_hash, sizeof(computed_hash));
+
+    return match;
 }

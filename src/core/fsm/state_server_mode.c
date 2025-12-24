@@ -159,9 +159,16 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
         printf("USB server initialized\n");
     }
 
-    /* Set up signal handlers for graceful shutdown */
-    signal(SIGINT, server_signal_handler);
-    signal(SIGTERM, server_signal_handler);
+    /* Set up signal handlers for graceful shutdown (NET-009 fix: use sigaction) */
+    {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = server_signal_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(SIGINT, &sa, NULL);
+        sigaction(SIGTERM, &sa, NULL);
+    }
 
     printf("Server listening on %s:%d\n",
            (config->listen_address == NULL) ? "0.0.0.0" : config->listen_address,

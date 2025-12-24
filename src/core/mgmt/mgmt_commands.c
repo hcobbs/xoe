@@ -8,6 +8,8 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <errno.h>
+#include <limits.h>
 
 /**
  * Management Command Implementation
@@ -249,13 +251,16 @@ static int cmd_set(mgmt_session_t *session, int argc, char **argv) {
         send_fmt(session, "Pending: mode = %s\n", value);
 
     } else if (strcmp(param, "port") == 0) {
-        int port = atoi(value);
-        if (port <= 0 || port > 65535) {
+        char *endptr;
+        long port;
+        errno = 0;
+        port = strtol(value, &endptr, 10);
+        if (errno == ERANGE || *endptr != '\0' || port <= 0 || port > 65535) {
             send_str(session, "Invalid port\n");
             return 0;
         }
-        mgmt_config_set_listen_port(g_config_manager, port);
-        send_fmt(session, "Pending: port = %d\n", port);
+        mgmt_config_set_listen_port(g_config_manager, (int)port);
+        send_fmt(session, "Pending: port = %ld\n", port);
 
     } else {
         send_fmt(session, "Unknown parameter: %s\n", param);

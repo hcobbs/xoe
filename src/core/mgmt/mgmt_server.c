@@ -59,6 +59,17 @@ static void record_auth_failure(mgmt_server_t *server, in_addr_t ip);
 static void clear_auth_failure(mgmt_server_t *server, in_addr_t ip);
 
 /**
+ * secure_zero - Securely clear sensitive memory (NET-015 fix)
+ * Uses volatile pointer to prevent compiler optimization.
+ */
+static void secure_zero(void* ptr, size_t len) {
+    volatile unsigned char* p = (volatile unsigned char*)ptr;
+    while (len--) {
+        *p++ = 0;
+    }
+}
+
+/**
  * mgmt_server_start - Start management server
  */
 mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
@@ -379,11 +390,15 @@ static int authenticate_session(mgmt_session_t *session) {
 
         /* Verify password against stored hash (constant-time comparison) */
         if (password_verify(session->read_buffer, session->password) == 1) {
-            const char *success = "Authentication successful\n\n";
-            write(session->socket_fd, success, strlen(success));
+            /* Clear password from buffer immediately (NET-015 fix) */
+            secure_zero(session->read_buffer, MGMT_BUFFER_SIZE);
+            write(session->socket_fd, "Authentication successful\n\n", 27);
             session->authenticated = 1;
             return 1;
         }
+
+        /* Clear password from buffer after failed attempt (NET-015 fix) */
+        secure_zero(session->read_buffer, MGMT_BUFFER_SIZE);
 
         attempts++;
         if (attempts < 3) {

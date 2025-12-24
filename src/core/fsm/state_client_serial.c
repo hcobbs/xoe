@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <signal.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -103,9 +104,16 @@ xoe_state_t state_client_serial(xoe_config_t *config) {
 
     printf("Serial port opened successfully\n");
 
-    /* Install signal handlers for graceful shutdown */
-    signal(SIGINT, signal_handler);
-    signal(SIGTERM, signal_handler);
+    /* Install signal handlers for graceful shutdown (NET-009 fix: use sigaction) */
+    {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = signal_handler;
+        sigemptyset(&sa.sa_mask);
+        sa.sa_flags = 0;
+        sigaction(SIGINT, &sa, NULL);
+        sigaction(SIGTERM, &sa, NULL);
+    }
     g_serial_client_ptr = serial_client;
     g_shutdown_requested = 0;
 
