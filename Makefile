@@ -44,7 +44,7 @@ LIBS =
 UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Linux)
-    LIBS += -lpthread -lssl -lcrypto -lusb-1.0
+    LIBS += -lpthread -lssl -lcrypto -lusb-1.0 -lz
 endif
 ifeq ($(UNAME_S),Darwin) # macOS
     LIBS += -lpthread
@@ -66,19 +66,21 @@ ifeq ($(UNAME_S),Darwin) # macOS
     else
         LIBS += -lusb-1.0
     endif
+    # zlib for CRC32 (usually system-provided on macOS)
+    LIBS += -lz
 endif
 ifeq ($(UNAME_S),FreeBSD)
-    LIBS += -lpthread -lssl -lcrypto -lusb
+    LIBS += -lpthread -lssl -lcrypto -lusb -lz
     INCLUDES += -I/usr/local/include
     LIBS += -L/usr/local/lib
 endif
 ifeq ($(UNAME_S),OpenBSD)
-    LIBS += -lpthread -lssl -lcrypto -lusb-1.0
+    LIBS += -lpthread -lssl -lcrypto -lusb-1.0 -lz
     INCLUDES += -I/usr/local/include
     LIBS += -L/usr/local/lib
 endif
 ifeq ($(UNAME_S),NetBSD)
-    LIBS += -lpthread -lssl -lcrypto -lusb-1.0
+    LIBS += -lpthread -lssl -lcrypto -lusb-1.0 -lz
     INCLUDES += -I/usr/pkg/include
     LIBS += -L/usr/pkg/lib
 endif

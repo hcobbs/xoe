@@ -13,6 +13,7 @@
 #include "usb_server.h"
 #include "usb_protocol.h"
 #include "lib/common/definitions.h"
+#include "lib/protocol/wire_format.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -215,16 +216,18 @@ int usb_server_route_urb(usb_server_t* server,
         return E_NOT_FOUND;
     }
 
-    /* Send packet to target client */
+    /* Send packet to target client using wire format (LIB-001/NET-006 fix) */
     pthread_mutex_lock(&server->clients[i].send_lock);
 
-    sent = send(target_fd, &packet, sizeof(xoe_packet_t), 0);
+    result = xoe_wire_send(target_fd, &packet);
 
     pthread_mutex_unlock(&server->clients[i].send_lock);
 
-    if (sent < 0) {
-        fprintf(stderr, "USB Server: Failed to route packet: %s\n",
-                strerror(errno));
+    (void)sent;  /* Suppress unused warning */
+
+    if (result != 0) {
+        fprintf(stderr, "USB Server: Failed to route packet: error %d\n",
+                result);
         server->routing_errors++;
         usb_protocol_free_payload(&packet);  /* Free allocated payload */
         return E_NETWORK_ERROR;
@@ -269,14 +272,15 @@ static int usb_server_handle_register(usb_server_t* server,
         return result;
     }
 
-    /* Send response back to client */
-    sent = send(sender_fd, &response, sizeof(xoe_packet_t), 0);
-    if (sent < 0) {
-        fprintf(stderr, "USB Server: Failed to send registration response: %s\n",
-                strerror(errno));
+    /* Send response back to client using wire format (LIB-001/NET-006 fix) */
+    result = xoe_wire_send(sender_fd, &response);
+    if (result != 0) {
+        fprintf(stderr, "USB Server: Failed to send registration response: error %d\n",
+                result);
         usb_protocol_free_payload(&response);  /* Free allocated payload */
         return E_NETWORK_ERROR;
     }
+    (void)sent;  /* Suppress unused warning */
 
     /* Free allocated payload after successful send */
     usb_protocol_free_payload(&response);
@@ -313,14 +317,15 @@ static int usb_server_handle_unregister(usb_server_t* server,
         return result;
     }
 
-    /* Send response back to client */
-    sent = send(sender_fd, &response, sizeof(xoe_packet_t), 0);
-    if (sent < 0) {
-        fprintf(stderr, "USB Server: Failed to send unregistration response: %s\n",
-                strerror(errno));
+    /* Send response back to client using wire format (LIB-001/NET-006 fix) */
+    result = xoe_wire_send(sender_fd, &response);
+    if (result != 0) {
+        fprintf(stderr, "USB Server: Failed to send unregistration response: error %d\n",
+                result);
         usb_protocol_free_payload(&response);  /* Free allocated payload */
         return E_NETWORK_ERROR;
     }
+    (void)sent;  /* Suppress unused warning */
 
     /* Free allocated payload after successful send */
     usb_protocol_free_payload(&response);

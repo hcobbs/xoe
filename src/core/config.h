@@ -63,6 +63,8 @@ typedef struct {
     int encryption_mode;                /* TLS encryption mode (0=off, 1=on) */
     char cert_path[TLS_CERT_PATH_MAX];  /* TLS certificate path */
     char key_path[TLS_CERT_PATH_MAX];   /* TLS key path */
+    char ca_path[TLS_CERT_PATH_MAX];    /* TLS CA certificate path (empty = system) */
+    int tls_verify_mode;                /* TLS verification mode (0=none, 1=peer) */
     int use_serial;                     /* Serial mode flag */
     void *serial_config;                /* Opaque pointer to serial_config_t */
     char *serial_device;                /* Serial device path */

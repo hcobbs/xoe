@@ -60,14 +60,14 @@ SSL_CTX* tls_context_init(const char* cert_file, const char* key_file, int tls_v
 int tls_context_configure(SSL_CTX* ctx, int tls_version);
 
 /**
- * @brief Initialize a TLS context for client mode
+ * @brief Initialize a TLS context for client mode (insecure, no verification)
  *
  * Creates and configures an SSL_CTX for TLS client operation.
  * Configures TLS version according to tls_version parameter.
- * Does NOT require certificates (client mode).
+ * Does NOT verify server certificates. Use only for testing.
  *
- * Must be called before initiating TLS connections to servers.
- * The returned context is read-only and thread-safe after initialization.
+ * SECURITY WARNING: This function disables certificate verification.
+ * For production use, call tls_context_init_client_verified() instead.
  *
  * @param tls_version TLS version to use (ENCRYPT_TLS12 or ENCRYPT_TLS13)
  * @return SSL_CTX* on success, NULL on failure
@@ -77,6 +77,25 @@ int tls_context_configure(SSL_CTX* ctx, int tls_version);
  *   E_UNKNOWN_ERROR    - OpenSSL initialization failed
  */
 SSL_CTX* tls_context_init_client(int tls_version);
+
+/**
+ * @brief Initialize a TLS context for client mode with certificate verification
+ *
+ * Creates and configures an SSL_CTX for TLS client operation with proper
+ * certificate verification. This is the recommended function for production.
+ *
+ * @param tls_version TLS version to use (ENCRYPT_TLS12 or ENCRYPT_TLS13)
+ * @param ca_file     Path to CA certificate file, or NULL/empty for system store
+ * @param verify_mode Verification mode: TLS_VERIFY_NONE or TLS_VERIFY_PEER
+ * @return SSL_CTX* on success, NULL on failure
+ *
+ * Error codes (check tls_get_last_error()):
+ *   E_INVALID_ARGUMENT - Invalid version
+ *   E_TLS_CERT_INVALID - Failed to load CA certificates
+ *   E_UNKNOWN_ERROR    - OpenSSL initialization failed
+ */
+SSL_CTX* tls_context_init_client_verified(int tls_version, const char* ca_file,
+                                          int verify_mode);
 
 /**
  * @brief Clean up the global TLS context

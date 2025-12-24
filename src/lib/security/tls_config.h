@@ -22,6 +22,7 @@
 #define TLS_CERT_PATH_MAX 256
 #define TLS_DEFAULT_CERT_FILE "./certs/server.crt"
 #define TLS_DEFAULT_KEY_FILE  "./certs/server.key"
+#define TLS_DEFAULT_CA_FILE   ""  /* Empty = use system CA store */
 
 /* TLS Version Configuration */
 /* Note: TLS_MIN_VERSION uses OpenSSL constants defined in openssl/tls1.h */
@@ -42,7 +43,7 @@
 #define TLS_VERIFY_NONE   0  /* No client certificate verification */
 #define TLS_VERIFY_PEER   1  /* Request and verify client certificate */
 
-#define TLS_DEFAULT_VERIFY_MODE TLS_VERIFY_NONE
+#define TLS_DEFAULT_VERIFY_MODE TLS_VERIFY_PEER
 
 /* TLS Session Configuration */
 #define TLS_SESSION_TIMEOUT 300  /* Session timeout in seconds (5 minutes) */

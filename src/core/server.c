@@ -31,6 +31,7 @@
 /* USB server includes */
 #include "connectors/usb/usb_server.h"
 #include "lib/protocol/protocol.h"
+#include "lib/protocol/wire_format.h"
 
 /* Global fixed-size client pool */
 static client_info_t client_pool[MAX_CLIENTS];
@@ -135,25 +136,39 @@ void *handle_client(void *arg) {
 #endif
 
     /* Protocol handling loop - detect and route based on protocol */
+    /* Uses wire format for secure packet serialization (LIB-001/NET-006 fix) */
     while (1) {
         xoe_packet_t packet;
+        int recv_result;
 
 #if TLS_ENABLED
         if (tls != NULL) {
-            bytes_received = tls_read(tls, (char*)&packet, sizeof(xoe_packet_t));
+            recv_result = xoe_wire_recv_tls(tls, &packet);
         } else {
-            bytes_received = recv(client_socket, &packet, sizeof(xoe_packet_t), 0);
+            recv_result = xoe_wire_recv(client_socket, &packet);
         }
 #else
-        bytes_received = recv(client_socket, &packet, sizeof(xoe_packet_t), 0);
+        recv_result = xoe_wire_recv(client_socket, &packet);
 #endif
-        if (bytes_received <= 0) {
+
+        if (recv_result != 0) {
+            if (recv_result == E_IO_ERROR) {
+                bytes_received = 0;  /* Connection closed or error */
+            } else if (recv_result == E_CHECKSUM_MISMATCH) {
+                fprintf(stderr, "Checksum mismatch from %s:%d\n",
+                        client_ip, ntohs(client_addr.sin_port));
+                bytes_received = -1;
+            } else {
+                bytes_received = -1;  /* Other error */
+            }
             break;
         }
 
+        /* Mark as successful receive for logging */
+        bytes_received = 1;
+
         /* Check if this is a USB protocol packet */
-        if (bytes_received == sizeof(xoe_packet_t) &&
-            packet.protocol_id == XOE_PROTOCOL_USB) {
+        if (packet.protocol_id == XOE_PROTOCOL_USB) {
 
             /* Route via USB server if available */
             if (g_usb_server != NULL) {
@@ -167,43 +182,40 @@ void *handle_client(void *arg) {
                 fprintf(stderr, "USB packet received but USB server not initialized\n");
             }
         } else {
-            /* Legacy echo mode for non-USB packets */
-            printf("Received from %s:%d (%d bytes)\n",
-                   client_ip, ntohs(client_addr.sin_port), bytes_received);
+            /* Echo mode for non-USB packets */
+            printf("Received from %s:%d (protocol %d, version %d)\n",
+                   client_ip, ntohs(client_addr.sin_port),
+                   packet.protocol_id, packet.protocol_version);
 
 #if TLS_ENABLED
             if (tls != NULL) {
-                if (tls_write(tls, (char*)&packet, bytes_received) <= 0) {
+                if (xoe_wire_send_tls(tls, &packet) != 0) {
                     fprintf(stderr, "TLS write failed\n");
                     break;
                 }
             } else {
-                if (send(client_socket, &packet, bytes_received, 0) < 0) {
+                if (xoe_wire_send(client_socket, &packet) != 0) {
                     perror("send failed");
                     break;
                 }
             }
 #else
-            if (send(client_socket, &packet, bytes_received, 0) < 0) {
+            if (xoe_wire_send(client_socket, &packet) != 0) {
                 perror("send failed");
                 break;
             }
 #endif
         }
+
+        /* Free payload allocated by xoe_wire_recv */
+        xoe_wire_free_payload(&packet);
     }
 
     if (bytes_received == 0) {
         printf("Client %s:%d disconnected\n", client_ip, ntohs(client_addr.sin_port));
     } else if (bytes_received == -1) {
-#if TLS_ENABLED
-        if (tls != NULL) {
-            fprintf(stderr, "TLS read error: %s\n", tls_get_error_string());
-        } else {
-            perror("recv failed");
-        }
-#else
-        perror("recv failed");
-#endif
+        fprintf(stderr, "Error receiving from %s:%d\n",
+                client_ip, ntohs(client_addr.sin_port));
     }
 
 cleanup:

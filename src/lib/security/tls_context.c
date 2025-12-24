@@ -172,20 +172,68 @@ SSL_CTX* tls_context_init_client(int tls_version) {
         return NULL;
     }
 
-    /* Client certificate verification mode */
-    /* CURRENT BEHAVIOR: SSL_VERIFY_NONE allows self-signed server certificates */
-    /* This is appropriate for testing but NOT for production use */
     /*
-     * SECURITY NOTE: Certificate verification is currently disabled to support
-     * testing with self-signed certificates. In production deployments:
-     * 1. Use SSL_VERIFY_PEER to verify server certificate
-     * 2. Load trusted CA certificates with SSL_CTX_load_verify_locations()
-     * 3. Consider hostname verification with SSL_set_hostflags()
-     *
-     * TODO: Make verification mode runtime-configurable via command-line option
-     * or configuration file (TLS_DEFAULT_VERIFY_MODE is compile-time only)
+     * SECURITY WARNING: This function disables certificate verification.
+     * It exists only for testing with self-signed certificates.
+     * For production use, call tls_context_init_client_verified() instead.
      */
     SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+
+    return ctx;
+}
+
+SSL_CTX* tls_context_init_client_verified(int tls_version, const char* ca_file,
+                                          int verify_mode) {
+    SSL_CTX* ctx;
+    int ret;
+    int ssl_verify_mode;
+
+    /* Validate arguments */
+    if (tls_version != ENCRYPT_TLS12 && tls_version != ENCRYPT_TLS13) {
+        fprintf(stderr, "Invalid TLS version: %d (must be ENCRYPT_TLS12 or ENCRYPT_TLS13)\n", tls_version);
+        return NULL;
+    }
+
+    /* Create new SSL context using TLS client method */
+    ctx = SSL_CTX_new(TLS_client_method());
+    if (ctx == NULL) {
+        tls_print_errors("Failed to create SSL client context");
+        return NULL;
+    }
+
+    /* Configure TLS version and cipher suites */
+    ret = tls_context_configure(ctx, tls_version);
+    if (ret != 0) {
+        SSL_CTX_free(ctx);
+        return NULL;
+    }
+
+    /* Load CA certificates for verification */
+    if (verify_mode == TLS_VERIFY_PEER) {
+        if (ca_file != NULL && ca_file[0] != '\0') {
+            /* Load specified CA certificate file */
+            if (!SSL_CTX_load_verify_locations(ctx, ca_file, NULL)) {
+                tls_print_errors("Failed to load CA certificate file");
+                SSL_CTX_free(ctx);
+                return NULL;
+            }
+        } else {
+            /* Use system default CA certificate store */
+            if (!SSL_CTX_set_default_verify_paths(ctx)) {
+                tls_print_errors("Failed to load system CA certificates");
+                SSL_CTX_free(ctx);
+                return NULL;
+            }
+        }
+    }
+
+    /* Set verification mode */
+    if (verify_mode == TLS_VERIFY_PEER) {
+        ssl_verify_mode = SSL_VERIFY_PEER;
+    } else {
+        ssl_verify_mode = SSL_VERIFY_NONE;
+    }
+    SSL_CTX_set_verify(ctx, ssl_verify_mode, NULL);
 
     return ctx;
 }

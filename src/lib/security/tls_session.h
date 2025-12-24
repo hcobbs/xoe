@@ -94,6 +94,32 @@ int tls_session_shutdown(SSL* ssl);
 SSL* tls_session_create_client(SSL_CTX* ctx, int server_socket);
 
 /**
+ * @brief Create a new TLS session for client-side connection with hostname verification
+ *
+ * Creates an SSL object from the client context, associates it with the
+ * server socket, enables hostname verification, and performs the client-side
+ * TLS handshake. This is the recommended function for production use.
+ *
+ * Hostname verification ensures the server certificate matches the expected
+ * hostname, preventing man-in-the-middle attacks.
+ *
+ * @param ctx           Client SSL context (from tls_context_init_client_verified)
+ * @param server_socket Server socket file descriptor
+ * @param hostname      Expected server hostname for certificate verification
+ * @return SSL* on success, NULL on failure
+ *
+ * Error codes (check tls_get_last_error()):
+ *   E_INVALID_ARGUMENT - Invalid ctx, socket, or hostname
+ *   E_OUT_OF_MEMORY    - SSL object allocation failed
+ *   E_TLS_HANDSHAKE_FAILED - Handshake or hostname verification failed
+ *   E_NETWORK_ERROR    - Network error during handshake
+ *   E_TIMEOUT          - Handshake timeout
+ *   E_UNKNOWN_ERROR    - Other OpenSSL error
+ */
+SSL* tls_session_create_client_verified(SSL_CTX* ctx, int server_socket,
+                                        const char* hostname);
+
+/**
  * @brief Destroy TLS session and free resources
  *
  * Frees the SSL object and associated resources.
