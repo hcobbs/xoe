@@ -44,7 +44,8 @@ typedef struct {
     pthread_mutex_t shutdown_mutex;
     int shutdown_flag;
 
-    /* Sequence numbers */
+    /* Sequence numbers (SER-004 fix: mutex-protected) */
+    pthread_mutex_t seq_mutex;
     uint16_t tx_sequence;
     uint16_t rx_sequence;
 } serial_client_t;

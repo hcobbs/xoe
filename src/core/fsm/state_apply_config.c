@@ -67,8 +67,8 @@ xoe_state_t state_apply_config(xoe_config_t *config) {
     printf("Configuration applied successfully\n");
     printf("Restarting with new configuration...\n");
 
-    /* Reset restart flag */
-    g_mgmt_restart_requested = 0;
+    /* Reset restart flag (NET-007 fix: thread-safe clear) */
+    mgmt_restart_clear();
 
     /* Return to mode selection to restart with new config */
     return STATE_MODE_SELECT;

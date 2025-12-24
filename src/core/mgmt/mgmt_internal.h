@@ -3,6 +3,8 @@
 
 #include <signal.h>
 #include <pthread.h>
+#include <time.h>
+#include <netinet/in.h>
 
 /**
  * Internal structures shared between management server and command handlers.
@@ -11,6 +13,21 @@
 
 #define MGMT_BUFFER_SIZE 1024    /* Per-session I/O buffer */
 #define MGMT_PASSWORD_MAX 128    /* Max password length */
+
+/* Rate limiting constants (NET-004, FSM-009 fix) */
+#define MGMT_RATE_LIMIT_ENTRIES 16   /* Max tracked IPs */
+#define MGMT_RATE_LIMIT_LOCKOUT 30   /* Seconds to lock out after failures */
+#define MGMT_RATE_LIMIT_FAILURES 5   /* Failures before lockout */
+
+/* Rate limit entry for tracking auth failures per IP */
+typedef struct {
+    in_addr_t ip_addr;      /* IPv4 address (0 = unused) */
+    int failure_count;      /* Number of failed auth attempts */
+    time_t lockout_until;   /* Lockout expiry time (0 = not locked) */
+} mgmt_rate_limit_entry_t;
+
+/* Forward declaration */
+struct mgmt_server_t;
 
 /* Session structure - shared between server and commands */
 typedef struct mgmt_session_t {
@@ -21,6 +38,8 @@ typedef struct mgmt_session_t {
     volatile sig_atomic_t authenticated; /* Authentication status */
     char read_buffer[MGMT_BUFFER_SIZE];  /* Pre-allocated read buffer */
     char write_buffer[MGMT_BUFFER_SIZE]; /* Pre-allocated write buffer */
+    in_addr_t client_ip;        /* Client IP for rate limiting */
+    struct mgmt_server_t *server; /* Back-pointer to server for rate limiting */
 } mgmt_session_t;
 
 #endif /* CORE_MGMT_INTERNAL_H */

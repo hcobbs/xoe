@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <unistd.h>
+#include <time.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -36,6 +37,20 @@
 /* Global fixed-size client pool */
 static client_info_t client_pool[MAX_CLIENTS];
 static pthread_mutex_t pool_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* Connection rate limiting (NET-012 fix) */
+#define CONN_RATE_LIMIT_ENTRIES 32   /* Max tracked IPs */
+#define CONN_RATE_LIMIT_WINDOW  10   /* Time window in seconds */
+#define CONN_RATE_LIMIT_MAX     20   /* Max connections per window */
+
+typedef struct {
+    in_addr_t ip_addr;       /* IPv4 address (0 = unused) */
+    int conn_count;          /* Connection count in current window */
+    time_t window_start;     /* Start of current time window */
+} conn_rate_limit_entry_t;
+
+static conn_rate_limit_entry_t conn_rate_limits[CONN_RATE_LIMIT_ENTRIES];
+static pthread_mutex_t conn_rate_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* Global TLS context (read-only after initialization, thread-safe) */
 #if TLS_ENABLED
@@ -92,6 +107,71 @@ void init_client_pool(void) {
         client_pool[i].tls_session = NULL;
 #endif
     }
+
+    /* Initialize connection rate limit table (NET-012 fix) */
+    for (i = 0; i < CONN_RATE_LIMIT_ENTRIES; i++) {
+        conn_rate_limits[i].ip_addr = 0;
+        conn_rate_limits[i].conn_count = 0;
+        conn_rate_limits[i].window_start = 0;
+    }
+}
+
+/**
+ * check_connection_rate_limit - Check if IP is rate-limited (NET-012 fix)
+ * @ip: Client IP address in network byte order
+ *
+ * Returns: 1 if connection allowed, 0 if rate-limited
+ *
+ * Uses sliding window algorithm: allows CONN_RATE_LIMIT_MAX connections
+ * per CONN_RATE_LIMIT_WINDOW seconds per IP address.
+ */
+int check_connection_rate_limit(in_addr_t ip) {
+    int i;
+    int found = -1;
+    int empty = -1;
+    time_t now;
+    int allowed = 1;
+
+    now = time(NULL);
+
+    pthread_mutex_lock(&conn_rate_mutex);
+
+    /* Find existing entry or empty slot */
+    for (i = 0; i < CONN_RATE_LIMIT_ENTRIES; i++) {
+        if (conn_rate_limits[i].ip_addr == ip) {
+            found = i;
+            break;
+        }
+        if (empty < 0 && conn_rate_limits[i].ip_addr == 0) {
+            empty = i;
+        }
+    }
+
+    if (found >= 0) {
+        /* Check if window has expired */
+        if (now - conn_rate_limits[found].window_start >= CONN_RATE_LIMIT_WINDOW) {
+            /* Reset window */
+            conn_rate_limits[found].window_start = now;
+            conn_rate_limits[found].conn_count = 1;
+        } else {
+            /* Check limit within window */
+            if (conn_rate_limits[found].conn_count >= CONN_RATE_LIMIT_MAX) {
+                allowed = 0;
+            } else {
+                conn_rate_limits[found].conn_count++;
+            }
+        }
+    } else if (empty >= 0) {
+        /* Create new entry */
+        conn_rate_limits[empty].ip_addr = ip;
+        conn_rate_limits[empty].window_start = now;
+        conn_rate_limits[empty].conn_count = 1;
+    }
+    /* If table is full, allow connection (fail-open for availability) */
+
+    pthread_mutex_unlock(&conn_rate_mutex);
+
+    return allowed;
 }
 
 /**

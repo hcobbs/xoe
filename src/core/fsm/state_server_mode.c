@@ -218,6 +218,16 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
             release_client_slot(client_info);
             continue;
         }
+
+        /* Check connection rate limit (NET-012 fix) */
+        if (!check_connection_rate_limit(client_info->client_addr.sin_addr.s_addr)) {
+            fprintf(stderr, "Rate limit exceeded for %s, rejecting connection\n",
+                    inet_ntoa(client_info->client_addr.sin_addr));
+            close(new_socket);
+            release_client_slot(client_info);
+            continue;
+        }
+
         client_info->client_socket = new_socket;
 
         if (pthread_create(&thread_id, NULL, handle_client, (void *)client_info) != 0) {

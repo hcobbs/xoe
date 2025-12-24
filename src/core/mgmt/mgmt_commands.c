@@ -201,7 +201,7 @@ static int cmd_show(mgmt_session_t *session, int argc, char **argv) {
         send_fmt(session, "Pending Changes: %s\n",
                 has_pending ? "yes" : "no");
         send_fmt(session, "Restart Flag: %s\n",
-                g_mgmt_restart_requested ? "SET" : "clear");
+                mgmt_restart_is_requested() ? "SET" : "clear");
         send_str(session, "\n");
 
     } else if (strcmp(argv[1], "clients") == 0) {
@@ -388,7 +388,7 @@ static int cmd_restart(mgmt_session_t *session, int argc, char **argv) {
         return 0;
     }
 
-    g_mgmt_restart_requested = 1;
+    mgmt_restart_request();
 
     send_str(session, "\nRestart initiated\n");
     send_str(session, "Management session will remain active\n\n");

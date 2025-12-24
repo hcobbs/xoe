@@ -104,4 +104,15 @@ int wait_for_clients(int timeout_sec);
  */
 int get_active_client_count(void);
 
+/**
+ * check_connection_rate_limit - Check if IP is rate-limited (NET-012 fix)
+ * @ip: Client IP address in network byte order
+ *
+ * Returns: 1 if connection allowed, 0 if rate-limited
+ *
+ * Implements sliding window rate limiting: max 20 connections per 10 seconds
+ * per source IP address. Prevents connection flood DoS attacks.
+ */
+int check_connection_rate_limit(in_addr_t ip);
+
 #endif /* CORE_SERVER_H */
