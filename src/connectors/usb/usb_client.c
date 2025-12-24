@@ -121,9 +121,22 @@ usb_client_t* usb_client_init(const char* server_ip,
     client->running = FALSE;
     client->shutdown_requested = FALSE;
 
-    /* Initialize thread synchronization */
-    pthread_mutex_init(&client->lock, NULL);
-    pthread_cond_init(&client->shutdown_cond, NULL);
+    /* Initialize thread synchronization (USB-009 fix: check return values) */
+    if (pthread_mutex_init(&client->lock, NULL) != 0) {
+        free(client->transfer_threads);
+        free(client->devices);
+        free(client->server_ip);
+        free(client);
+        return NULL;
+    }
+    if (pthread_cond_init(&client->shutdown_cond, NULL) != 0) {
+        pthread_mutex_destroy(&client->lock);
+        free(client->transfer_threads);
+        free(client->devices);
+        free(client->server_ip);
+        free(client);
+        return NULL;
+    }
 
     /* Initialize statistics */
     client->packets_sent = 0;
@@ -136,7 +149,16 @@ usb_client_t* usb_client_init(const char* server_ip,
     client->pending_count = 0;
     client->timeouts = 0;
 
-    pthread_mutex_init(&client->pending_lock, NULL);
+    /* USB-009 fix: check pthread_mutex_init return value */
+    if (pthread_mutex_init(&client->pending_lock, NULL) != 0) {
+        pthread_cond_destroy(&client->shutdown_cond);
+        pthread_mutex_destroy(&client->lock);
+        free(client->transfer_threads);
+        free(client->devices);
+        free(client->server_ip);
+        free(client);
+        return NULL;
+    }
 
     return client;
 }

@@ -359,9 +359,10 @@ echo -n "Test 7: Concurrent connections (10 clients, TLS 1.3)... "
 PORT=$(find_free_port)
 if start_server $PORT -e tls13; then
     # Launch 10 concurrent TLS connections using xoe client and track their PIDs
+    # Use </dev/null to avoid stdin blocking (client exits on EOF immediately)
     client_pids=""
     for i in {1..10}; do
-        echo "Client $i" | timeout 5 $BIN -c 127.0.0.1:$PORT -e tls13 > /dev/null 2>&1 &
+        timeout 5 $BIN -c 127.0.0.1:$PORT -e tls13 </dev/null > /dev/null 2>&1 &
         client_pids="$client_pids $!"
     done
 

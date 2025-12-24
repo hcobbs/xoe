@@ -14,6 +14,13 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#if TLS_ENABLED
+#include "lib/security/tls_config.h"
+#include "lib/security/tls_context.h"
+#include "lib/security/tls_session.h"
+#include "lib/security/tls_io.h"
+#endif
+
 /**
  * Management Server Implementation
  *
@@ -46,6 +53,11 @@ struct mgmt_server_t {
     /* Rate limiting (NET-004, FSM-009 fix) */
     mgmt_rate_limit_entry_t rate_limits[MGMT_RATE_LIMIT_ENTRIES];
     pthread_mutex_t rate_limit_mutex; /* Protects rate limit table */
+#if TLS_ENABLED
+    /* TLS support for management interface (FSM-006 fix) */
+    SSL_CTX* tls_ctx;           /* TLS context for management connections */
+    int tls_enabled;            /* TLS enabled flag */
+#endif
 };
 
 /* Forward declarations */
@@ -67,6 +79,32 @@ static void secure_zero(void* ptr, size_t len) {
     while (len--) {
         *p++ = 0;
     }
+}
+
+/**
+ * mgmt_write - TLS-aware write helper (FSM-006 fix)
+ * Uses TLS if enabled, falls back to plain socket write.
+ */
+ssize_t mgmt_write(mgmt_session_t *session, const void *buf, size_t len) {
+#if TLS_ENABLED
+    if (session->tls != NULL) {
+        return tls_write(session->tls, buf, len);
+    }
+#endif
+    return write(session->socket_fd, buf, len);
+}
+
+/**
+ * mgmt_read - TLS-aware read helper (FSM-006 fix)
+ * Uses TLS if enabled, falls back to plain socket read.
+ */
+ssize_t mgmt_read(mgmt_session_t *session, void *buf, size_t len) {
+#if TLS_ENABLED
+    if (session->tls != NULL) {
+        return tls_read(session->tls, buf, len);
+    }
+#endif
+    return read(session->socket_fd, buf, len);
 }
 
 /**
@@ -107,7 +145,12 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
     }
 
     /* Initialize session pool (pre-allocated, zero dynamic allocation) */
-    pthread_mutex_init(&server->session_mutex, NULL);
+    /* USB-009 fix: check pthread_mutex_init return value */
+    if (pthread_mutex_init(&server->session_mutex, NULL) != 0) {
+        fprintf(stderr, "Failed to initialize session mutex\n");
+        free(server);
+        return NULL;
+    }
     for (i = 0; i < MAX_MGMT_SESSIONS; i++) {
         server->sessions[i].in_use = 0;
         server->sessions[i].socket_fd = -1;
@@ -121,12 +164,40 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
     }
 
     /* Initialize rate limiting (NET-004, FSM-009 fix) */
-    pthread_mutex_init(&server->rate_limit_mutex, NULL);
+    /* USB-009 fix: check pthread_mutex_init return value */
+    if (pthread_mutex_init(&server->rate_limit_mutex, NULL) != 0) {
+        fprintf(stderr, "Failed to initialize rate limit mutex\n");
+        pthread_mutex_destroy(&server->session_mutex);
+        free(server);
+        return NULL;
+    }
     for (i = 0; i < MGMT_RATE_LIMIT_ENTRIES; i++) {
         server->rate_limits[i].ip_addr = 0;
         server->rate_limits[i].failure_count = 0;
         server->rate_limits[i].lockout_until = 0;
     }
+
+#if TLS_ENABLED
+    /* Initialize TLS context for management connections (FSM-006 fix) */
+    server->tls_enabled = 0;
+    server->tls_ctx = NULL;
+
+    /* Only enable TLS if encryption is configured and cert/key exist */
+    if (config->encryption_mode == ENCRYPT_TLS12 ||
+        config->encryption_mode == ENCRYPT_TLS13) {
+        if (config->cert_path[0] != '\0' && config->key_path[0] != '\0') {
+            server->tls_ctx = tls_context_init(config->cert_path,
+                                               config->key_path,
+                                               config->encryption_mode);
+            if (server->tls_ctx == NULL) {
+                fprintf(stderr, "Warning: Failed to init TLS for management\n");
+                fprintf(stderr, "Management will use unencrypted connections\n");
+            } else {
+                server->tls_enabled = 1;
+            }
+        }
+    }
+#endif
 
     /* Create listening socket */
     server->listen_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -183,6 +254,11 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
     }
 
     printf("Management interface started on 127.0.0.1:%d\n", server->port);
+#if TLS_ENABLED
+    printf("Encryption: %s\n", server->tls_enabled ? "TLS enabled" : "disabled");
+#else
+    printf("Encryption: disabled (TLS not compiled)\n");
+#endif
     printf("Authentication: enabled\n");
 
     return server;
@@ -216,6 +292,13 @@ void mgmt_server_stop(mgmt_server_t *server) {
     pthread_mutex_lock(&server->session_mutex);
     for (i = 0; i < MAX_MGMT_SESSIONS; i++) {
         if (server->sessions[i].in_use && server->sessions[i].socket_fd >= 0) {
+#if TLS_ENABLED
+            if (server->sessions[i].tls != NULL) {
+                tls_session_shutdown(server->sessions[i].tls);
+                tls_session_destroy(server->sessions[i].tls);
+                server->sessions[i].tls = NULL;
+            }
+#endif
             close(server->sessions[i].socket_fd);
             server->sessions[i].socket_fd = -1;
         }
@@ -224,6 +307,14 @@ void mgmt_server_stop(mgmt_server_t *server) {
 
     /* Wait briefly for session threads to exit (they're detached, can't join) */
     sleep(1);
+
+#if TLS_ENABLED
+    /* Cleanup TLS context (FSM-006 fix) */
+    if (server->tls_ctx != NULL) {
+        tls_context_cleanup(server->tls_ctx);
+        server->tls_ctx = NULL;
+    }
+#endif
 
     /* Cleanup (no dynamic memory to free - all pre-allocated) */
     pthread_mutex_destroy(&server->rate_limit_mutex);
@@ -302,6 +393,21 @@ static void* listener_thread(void* arg) {
 
         session->socket_fd = client_fd;
         session->client_ip = client_ip;
+#if TLS_ENABLED
+        session->tls = NULL;
+
+        /* Perform TLS handshake if TLS is enabled (FSM-006 fix) */
+        if (server->tls_enabled && server->tls_ctx != NULL) {
+            session->tls = tls_session_create(server->tls_ctx, client_fd);
+            if (session->tls == NULL) {
+                const char *msg = "TLS handshake failed\n";
+                write(client_fd, msg, strlen(msg));
+                close(client_fd);
+                release_session_slot(session);
+                continue;
+            }
+        }
+#endif
 
         /* Spawn session handler (detached) */
         if (pthread_create(&session_thread, NULL, session_handler, session) != 0) {
@@ -328,15 +434,22 @@ static void* session_handler(void* arg) {
     mgmt_session_t *session = (mgmt_session_t*)arg;
     const char *welcome = "XOE Management Console v1.0\n";
 
-    /* Send welcome (using pre-allocated write_buffer not needed for constants) */
-    write(session->socket_fd, welcome, strlen(welcome));
+    /* Send welcome (using TLS if enabled - FSM-006 fix) */
+    mgmt_write(session, welcome, strlen(welcome));
 
     /* Authenticate (always required for security) */
     if (!authenticate_session(session)) {
         const char *msg = "Authentication failed\n";
-        write(session->socket_fd, msg, strlen(msg));
+        mgmt_write(session, msg, strlen(msg));
         /* Record auth failure for rate limiting (NET-004, FSM-009 fix) */
         record_auth_failure(session->server, session->client_ip);
+#if TLS_ENABLED
+        if (session->tls != NULL) {
+            tls_session_shutdown(session->tls);
+            tls_session_destroy(session->tls);
+            session->tls = NULL;
+        }
+#endif
         close(session->socket_fd);
         release_session_slot(session);
         pthread_exit(NULL);
@@ -349,6 +462,13 @@ static void* session_handler(void* arg) {
     mgmt_command_loop(session);
 
     /* Cleanup */
+#if TLS_ENABLED
+    if (session->tls != NULL) {
+        tls_session_shutdown(session->tls);
+        tls_session_destroy(session->tls);
+        session->tls = NULL;
+    }
+#endif
     close(session->socket_fd);
     release_session_slot(session);
     pthread_exit(NULL);
@@ -366,12 +486,12 @@ static int authenticate_session(mgmt_session_t *session) {
     int attempts = 0;
 
     while (attempts < 3) {
-        /* Send prompt */
-        write(session->socket_fd, prompt, strlen(prompt));
+        /* Send prompt (using TLS if enabled - FSM-006 fix) */
+        mgmt_write(session, prompt, strlen(prompt));
 
         /* Read password into pre-allocated buffer (blocking, with bounds check) */
-        bytes_read = read(session->socket_fd, session->read_buffer,
-                         MGMT_BUFFER_SIZE - 1);
+        bytes_read = mgmt_read(session, session->read_buffer,
+                              MGMT_BUFFER_SIZE - 1);
         if (bytes_read <= 0) {
             return 0; /* Connection closed */
         }
@@ -392,7 +512,7 @@ static int authenticate_session(mgmt_session_t *session) {
         if (password_verify(session->read_buffer, session->password) == 1) {
             /* Clear password from buffer immediately (NET-015 fix) */
             secure_zero(session->read_buffer, MGMT_BUFFER_SIZE);
-            write(session->socket_fd, "Authentication successful\n\n", 27);
+            mgmt_write(session, "Authentication successful\n\n", 27);
             session->authenticated = 1;
             return 1;
         }
@@ -403,7 +523,7 @@ static int authenticate_session(mgmt_session_t *session) {
         attempts++;
         if (attempts < 3) {
             const char *retry = "Incorrect password, try again\n";
-            write(session->socket_fd, retry, strlen(retry));
+            mgmt_write(session, retry, strlen(retry));
         }
     }
 

@@ -5,6 +5,11 @@
 #include <pthread.h>
 #include <time.h>
 #include <netinet/in.h>
+#include <sys/types.h>
+
+#if TLS_ENABLED
+#include <openssl/ssl.h>
+#endif
 
 /**
  * Internal structures shared between management server and command handlers.
@@ -40,6 +45,16 @@ typedef struct mgmt_session_t {
     char write_buffer[MGMT_BUFFER_SIZE]; /* Pre-allocated write buffer */
     in_addr_t client_ip;        /* Client IP for rate limiting */
     struct mgmt_server_t *server; /* Back-pointer to server for rate limiting */
+#if TLS_ENABLED
+    SSL* tls;                   /* TLS session (FSM-006 fix) */
+#endif
 } mgmt_session_t;
+
+/**
+ * TLS-aware I/O helpers (FSM-006 fix)
+ * Uses TLS if enabled, falls back to plain socket I/O.
+ */
+ssize_t mgmt_write(mgmt_session_t *session, const void *buf, size_t len);
+ssize_t mgmt_read(mgmt_session_t *session, void *buf, size_t len);
 
 #endif /* CORE_MGMT_INTERNAL_H */

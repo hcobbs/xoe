@@ -405,6 +405,26 @@ static int configure_termios(int fd, const serial_config_t* config)
 }
 
 /**
+ * @brief Validate baud rate against whitelist (FSM-002, SER-002 fix)
+ *
+ * Only standard baud rates are accepted to prevent misconfiguration.
+ */
+int serial_validate_baud(int baud_rate)
+{
+    switch (baud_rate) {
+        case 9600:
+        case 19200:
+        case 38400:
+        case 57600:
+        case 115200:
+        case 230400:
+            return 0;  /* Valid */
+        default:
+            return -1; /* Invalid */
+    }
+}
+
+/**
  * @brief Convert baud rate integer to termios speed constant
  */
 static int baud_to_speed_const(int baud_rate, speed_t* speed)
