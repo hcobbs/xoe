@@ -43,6 +43,9 @@ struct mgmt_server_t {
     volatile sig_atomic_t shutdown_flag; /* Shutdown signal */
     mgmt_session_t sessions[MAX_MGMT_SESSIONS]; /* Session pool (pre-allocated) */
     pthread_mutex_t session_mutex; /* Protects session pool */
+    /* Rate limiting (NET-004, FSM-009 fix) */
+    mgmt_rate_limit_entry_t rate_limits[MGMT_RATE_LIMIT_ENTRIES];
+    pthread_mutex_t rate_limit_mutex; /* Protects rate limit table */
 };
 
 /* Forward declarations */
@@ -51,6 +54,9 @@ static void* session_handler(void* arg);
 static mgmt_session_t* acquire_session_slot(mgmt_server_t *server);
 static void release_session_slot(mgmt_session_t *session);
 static int authenticate_session(mgmt_session_t *session);
+static int check_rate_limit(mgmt_server_t *server, in_addr_t ip);
+static void record_auth_failure(mgmt_server_t *server, in_addr_t ip);
+static void clear_auth_failure(mgmt_server_t *server, in_addr_t ip);
 
 /**
  * mgmt_server_start - Start management server
@@ -95,16 +101,27 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
         server->sessions[i].in_use = 0;
         server->sessions[i].socket_fd = -1;
         server->sessions[i].authenticated = 0;
+        server->sessions[i].client_ip = 0;
+        server->sessions[i].server = server;  /* Back-pointer for rate limiting */
         /* Copy hashed password to each session's isolated buffer */
         strncpy(server->sessions[i].password, server->password_hash, MGMT_PASSWORD_MAX - 1);
         server->sessions[i].password[MGMT_PASSWORD_MAX - 1] = '\0';
         /* Buffers are already allocated as part of the structure */
     }
 
+    /* Initialize rate limiting (NET-004, FSM-009 fix) */
+    pthread_mutex_init(&server->rate_limit_mutex, NULL);
+    for (i = 0; i < MGMT_RATE_LIMIT_ENTRIES; i++) {
+        server->rate_limits[i].ip_addr = 0;
+        server->rate_limits[i].failure_count = 0;
+        server->rate_limits[i].lockout_until = 0;
+    }
+
     /* Create listening socket */
     server->listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server->listen_fd < 0) {
         fprintf(stderr, "Failed to create management socket: %s\n", strerror(errno));
+        pthread_mutex_destroy(&server->rate_limit_mutex);
         pthread_mutex_destroy(&server->session_mutex);
         free(server);
         return NULL;
@@ -127,6 +144,7 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
         fprintf(stderr, "Failed to bind management port %d: %s\n",
                 server->port, strerror(errno));
         close(server->listen_fd);
+        pthread_mutex_destroy(&server->rate_limit_mutex);
         pthread_mutex_destroy(&server->session_mutex);
         free(server);
         return NULL;
@@ -136,6 +154,7 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
     if (listen(server->listen_fd, MAX_PENDING_CONNECTIONS) < 0) {
         fprintf(stderr, "Failed to listen on management port: %s\n", strerror(errno));
         close(server->listen_fd);
+        pthread_mutex_destroy(&server->rate_limit_mutex);
         pthread_mutex_destroy(&server->session_mutex);
         free(server);
         return NULL;
@@ -146,6 +165,7 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
         fprintf(stderr, "Failed to create management listener thread: %s\n",
                 strerror(errno));
         close(server->listen_fd);
+        pthread_mutex_destroy(&server->rate_limit_mutex);
         pthread_mutex_destroy(&server->session_mutex);
         free(server);
         return NULL;
@@ -195,6 +215,7 @@ void mgmt_server_stop(mgmt_server_t *server) {
     sleep(1);
 
     /* Cleanup (no dynamic memory to free - all pre-allocated) */
+    pthread_mutex_destroy(&server->rate_limit_mutex);
     pthread_mutex_destroy(&server->session_mutex);
     free(server); /* Only the server structure itself was malloc'd */
 
@@ -233,6 +254,7 @@ static void* listener_thread(void* arg) {
     int client_fd;
     mgmt_session_t *session;
     pthread_t session_thread;
+    in_addr_t client_ip;
 
     while (!server->shutdown_flag) {
         client_len = sizeof(client_addr);
@@ -247,6 +269,17 @@ static void* listener_thread(void* arg) {
             continue;
         }
 
+        /* Extract client IP for rate limiting */
+        client_ip = client_addr.sin_addr.s_addr;
+
+        /* Check rate limit before accepting (NET-004, FSM-009 fix) */
+        if (!check_rate_limit(server, client_ip)) {
+            const char *msg = "Too many failed attempts. Try again later.\n";
+            write(client_fd, msg, strlen(msg));
+            close(client_fd);
+            continue;
+        }
+
         /* Acquire session slot */
         session = acquire_session_slot(server);
         if (session == NULL) {
@@ -257,6 +290,7 @@ static void* listener_thread(void* arg) {
         }
 
         session->socket_fd = client_fd;
+        session->client_ip = client_ip;
 
         /* Spawn session handler (detached) */
         if (pthread_create(&session_thread, NULL, session_handler, session) != 0) {
@@ -290,10 +324,15 @@ static void* session_handler(void* arg) {
     if (!authenticate_session(session)) {
         const char *msg = "Authentication failed\n";
         write(session->socket_fd, msg, strlen(msg));
+        /* Record auth failure for rate limiting (NET-004, FSM-009 fix) */
+        record_auth_failure(session->server, session->client_ip);
         close(session->socket_fd);
         release_session_slot(session);
         pthread_exit(NULL);
     }
+
+    /* Clear any previous failures on successful auth */
+    clear_auth_failure(session->server, session->client_ip);
 
     /* Main command loop (Phase 5) */
     mgmt_command_loop(session);
@@ -386,4 +425,126 @@ static void release_session_slot(mgmt_session_t *session) {
         session->socket_fd = -1;
         session->authenticated = 0;
     }
+}
+
+/**
+ * check_rate_limit - Check if IP is allowed to attempt authentication
+ *
+ * Returns 1 if allowed, 0 if rate limited (locked out).
+ * Automatically clears expired lockouts.
+ */
+static int check_rate_limit(mgmt_server_t *server, in_addr_t ip) {
+    int i;
+    time_t now;
+    int allowed = 1;
+
+    if (server == NULL) {
+        return 1;
+    }
+
+    now = time(NULL);
+
+    pthread_mutex_lock(&server->rate_limit_mutex);
+
+    for (i = 0; i < MGMT_RATE_LIMIT_ENTRIES; i++) {
+        if (server->rate_limits[i].ip_addr == ip) {
+            /* Check if lockout has expired */
+            if (server->rate_limits[i].lockout_until > 0) {
+                if (now < server->rate_limits[i].lockout_until) {
+                    /* Still locked out */
+                    allowed = 0;
+                } else {
+                    /* Lockout expired, clear entry */
+                    server->rate_limits[i].ip_addr = 0;
+                    server->rate_limits[i].failure_count = 0;
+                    server->rate_limits[i].lockout_until = 0;
+                }
+            }
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&server->rate_limit_mutex);
+
+    return allowed;
+}
+
+/**
+ * record_auth_failure - Record failed authentication attempt
+ *
+ * Increments failure count for IP. If threshold reached, sets lockout.
+ * Uses LRU-style replacement if table is full.
+ */
+static void record_auth_failure(mgmt_server_t *server, in_addr_t ip) {
+    int i;
+    int found = -1;
+    int empty = -1;
+    time_t now;
+
+    if (server == NULL) {
+        return;
+    }
+
+    now = time(NULL);
+
+    pthread_mutex_lock(&server->rate_limit_mutex);
+
+    /* Find existing entry or empty slot */
+    for (i = 0; i < MGMT_RATE_LIMIT_ENTRIES; i++) {
+        if (server->rate_limits[i].ip_addr == ip) {
+            found = i;
+            break;
+        }
+        if (empty < 0 && server->rate_limits[i].ip_addr == 0) {
+            empty = i;
+        }
+    }
+
+    if (found >= 0) {
+        /* Increment existing entry */
+        server->rate_limits[found].failure_count++;
+        if (server->rate_limits[found].failure_count >= MGMT_RATE_LIMIT_FAILURES) {
+            server->rate_limits[found].lockout_until = now + MGMT_RATE_LIMIT_LOCKOUT;
+            fprintf(stderr, "Rate limit: IP locked out for %d seconds\n",
+                    MGMT_RATE_LIMIT_LOCKOUT);
+        }
+    } else if (empty >= 0) {
+        /* Create new entry in empty slot */
+        server->rate_limits[empty].ip_addr = ip;
+        server->rate_limits[empty].failure_count = 1;
+        server->rate_limits[empty].lockout_until = 0;
+    } else {
+        /* Table full, overwrite first entry (simple replacement policy) */
+        server->rate_limits[0].ip_addr = ip;
+        server->rate_limits[0].failure_count = 1;
+        server->rate_limits[0].lockout_until = 0;
+    }
+
+    pthread_mutex_unlock(&server->rate_limit_mutex);
+}
+
+/**
+ * clear_auth_failure - Clear auth failure record on successful login
+ *
+ * Removes the IP from rate limit tracking after successful authentication.
+ */
+static void clear_auth_failure(mgmt_server_t *server, in_addr_t ip) {
+    int i;
+
+    if (server == NULL) {
+        return;
+    }
+
+    pthread_mutex_lock(&server->rate_limit_mutex);
+
+    for (i = 0; i < MGMT_RATE_LIMIT_ENTRIES; i++) {
+        if (server->rate_limits[i].ip_addr == ip) {
+            server->rate_limits[i].ip_addr = 0;
+            server->rate_limits[i].failure_count = 0;
+            server->rate_limits[i].lockout_until = 0;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&server->rate_limit_mutex);
 }

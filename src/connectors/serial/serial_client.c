@@ -85,9 +85,17 @@ serial_client_t* serial_client_init(const serial_config_t* config,
     memcpy(&client->config, config, sizeof(serial_config_t));
     client->network_fd = network_fd;
 
-    /* Initialize mutex */
+    /* Initialize mutexes */
     result = pthread_mutex_init(&client->shutdown_mutex, NULL);
     if (result != 0) {
+        free(client);
+        return NULL;
+    }
+
+    /* Initialize sequence mutex (SER-004 fix) */
+    result = pthread_mutex_init(&client->seq_mutex, NULL);
+    if (result != 0) {
+        pthread_mutex_destroy(&client->shutdown_mutex);
         free(client);
         return NULL;
     }
@@ -95,6 +103,7 @@ serial_client_t* serial_client_init(const serial_config_t* config,
     /* Open serial port */
     result = serial_port_open(&client->config, &client->serial_fd);
     if (result != 0) {
+        pthread_mutex_destroy(&client->seq_mutex);
         pthread_mutex_destroy(&client->shutdown_mutex);
         free(client);
         return NULL;
@@ -104,6 +113,7 @@ serial_client_t* serial_client_init(const serial_config_t* config,
     result = serial_buffer_init(&client->rx_buffer, 0);
     if (result != 0) {
         serial_port_close(client->serial_fd);
+        pthread_mutex_destroy(&client->seq_mutex);
         pthread_mutex_destroy(&client->shutdown_mutex);
         free(client);
         return NULL;
@@ -186,7 +196,8 @@ void serial_client_cleanup(serial_client_t** client)
     /* Destroy buffer */
     serial_buffer_destroy(&(*client)->rx_buffer);
 
-    /* Destroy mutex */
+    /* Destroy mutexes */
+    pthread_mutex_destroy(&(*client)->seq_mutex);
     pthread_mutex_destroy(&(*client)->shutdown_mutex);
 
     /* Free structure */
@@ -266,18 +277,22 @@ static void* serial_to_net_thread_func(void* arg)
             continue;
         }
 
-        /* Encapsulate into XOE packet */
-        result = serial_protocol_encapsulate(buffer, bytes_read,
-                                              client->tx_sequence, 0,
-                                              &packet);
-        if (result != 0) {
-            LOG_ERROR3("Packet encapsulation failed: error code %d, bytes=%d, seq=%u",
-                       result, bytes_read, client->tx_sequence);
-            serial_client_request_shutdown(client);
-            break;
-        }
+        /* Encapsulate into XOE packet (SER-004 fix: mutex-protected sequence) */
+        {
+            uint16_t seq;
+            pthread_mutex_lock(&client->seq_mutex);
+            seq = client->tx_sequence;
+            client->tx_sequence++;
+            pthread_mutex_unlock(&client->seq_mutex);
 
-        client->tx_sequence++;
+            result = serial_protocol_encapsulate(buffer, bytes_read, seq, 0, &packet);
+            if (result != 0) {
+                LOG_ERROR3("Packet encapsulation failed: error code %d, bytes=%d, seq=%u",
+                           result, bytes_read, seq);
+                serial_client_request_shutdown(client);
+                break;
+            }
+        }
 
         /* Send to network socket - store length before freeing payload */
         {
@@ -394,7 +409,10 @@ static void* net_to_serial_thread_func(void* arg)
             LOG_WARN1("Overrun error detected in packet seq=%u", sequence);
         }
 
+        /* Update rx sequence (SER-004 fix: mutex-protected) */
+        pthread_mutex_lock(&client->seq_mutex);
         client->rx_sequence = sequence;
+        pthread_mutex_unlock(&client->seq_mutex);
 
         /* Write to serial port via circular buffer */
         bytes_written = serial_buffer_write(&client->rx_buffer,

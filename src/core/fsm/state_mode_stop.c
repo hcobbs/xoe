@@ -12,7 +12,7 @@
  *
  * Gracefully shuts down the current operational mode in preparation for
  * a restart with new configuration. This state is triggered when the
- * management interface requests a mode restart via g_mgmt_restart_requested.
+ * management interface requests a mode restart via mgmt_restart_request().
  *
  * Server Mode Shutdown:
  * - Close server socket to stop accepting new connections
@@ -100,8 +100,8 @@ xoe_state_t state_mode_stop(xoe_config_t *config) {
             break;
     }
 
-    /* Clear restart flag */
-    g_mgmt_restart_requested = 0;
+    /* Clear restart flag (NET-007 fix: thread-safe clear) */
+    mgmt_restart_clear();
 
     /* Proceed to apply configuration */
     return STATE_APPLY_CONFIG;

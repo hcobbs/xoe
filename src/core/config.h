@@ -4,8 +4,14 @@
 #include "lib/common/types.h"
 #include <signal.h>
 
-/* Global restart flag for management-triggered mode restarts */
-extern volatile sig_atomic_t g_mgmt_restart_requested;
+/**
+ * Thread-safe restart flag accessors (NET-007, FSM-014 fix)
+ * Replaces direct access to volatile sig_atomic_t with mutex-protected functions.
+ */
+void mgmt_restart_request(void);
+void mgmt_restart_clear(void);
+int mgmt_restart_is_requested(void);
+int mgmt_restart_check_and_clear(void);
 
 /* Global config manager for runtime configuration changes */
 struct mgmt_config_manager_t;  /* Forward declaration */
