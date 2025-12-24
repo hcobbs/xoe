@@ -177,6 +177,7 @@ int usb_server_route_urb(usb_server_t* server,
 {
     xoe_packet_t packet;
     int target_fd = -1;
+    int target_index = -1;
     int i;
     int result;
     ssize_t sent;
@@ -193,7 +194,8 @@ int usb_server_route_urb(usb_server_t* server,
         return result;
     }
 
-    /* Find target client based on device_id */
+    /* Find target client based on device_id (USB-008 race fix) */
+    /* Acquire send_lock while holding registry_lock to prevent slot reuse */
     pthread_mutex_lock(&server->registry_lock);
 
     for (i = 0; i < USB_MAX_CLIENTS; i++) {
@@ -202,26 +204,29 @@ int usb_server_route_urb(usb_server_t* server,
             server->clients[i].socket_fd != sender_fd) {
 
             target_fd = server->clients[i].socket_fd;
+            target_index = i;
             break;
         }
     }
 
-    pthread_mutex_unlock(&server->registry_lock);
-
     /* Check if target found */
     if (target_fd < 0) {
+        pthread_mutex_unlock(&server->registry_lock);
         fprintf(stderr, "USB Server: No route for device_id=0x%08x\n",
                 urb_header->device_id);
         server->routing_errors++;
+        usb_protocol_free_payload(&packet);
         return E_NOT_FOUND;
     }
 
-    /* Send packet to target client using wire format (LIB-001/NET-006 fix) */
-    pthread_mutex_lock(&server->clients[i].send_lock);
+    /* Lock send_lock while holding registry_lock (prevents race) */
+    pthread_mutex_lock(&server->clients[target_index].send_lock);
+    pthread_mutex_unlock(&server->registry_lock);
 
+    /* Send packet to target client using wire format (LIB-001/NET-006 fix) */
     result = xoe_wire_send(target_fd, &packet);
 
-    pthread_mutex_unlock(&server->clients[i].send_lock);
+    pthread_mutex_unlock(&server->clients[target_index].send_lock);
 
     (void)sent;  /* Suppress unused warning */
 

@@ -15,6 +15,7 @@
 #include "lib/common/definitions.h"
 #include <stdlib.h>
 #include <string.h>
+#include <zlib.h>
 
 /*
  * Byte order conversion helpers
@@ -107,40 +108,42 @@ static void deserialize_urb_header(usb_urb_header_t* header, const uint8_t* buff
 }
 
 /**
- * @brief Calculate checksum over URB header and data
+ * @brief Calculate CRC32 checksum over URB header and data (USB-002 fix)
  *
- * Implementation note: Uses simple sum checksum for now. Can be upgraded
- * to CRC32 if stronger integrity checking is needed in production.
+ * Uses zlib's CRC32 for reliable error detection, replacing the
+ * weak byte-sum algorithm. The header is serialized to network byte order
+ * before checksumming to ensure cross-platform consistency.
+ *
+ * @param urb_header Pointer to URB header structure
+ * @param data Pointer to transfer data (may be NULL)
+ * @param data_len Length of transfer data in bytes
+ * @return CRC32 checksum value
  */
 uint32_t usb_protocol_checksum(
     const usb_urb_header_t* urb_header,
     const void* data,
     uint32_t data_len)
 {
-    uint32_t sum = 0;
-    const uint8_t* ptr;
-    uint32_t i;
+    uint8_t header_buffer[36];  /* Serialized URB header size */
+    uint32_t checksum;
 
     /* Validate input */
     if (urb_header == NULL) {
         return 0;
     }
 
-    /* Checksum the URB header */
-    ptr = (const uint8_t*)urb_header;
-    for (i = 0; i < sizeof(usb_urb_header_t); i++) {
-        sum += ptr[i];
-    }
+    /* Serialize header to network byte order for consistent checksum */
+    serialize_urb_header(header_buffer, urb_header);
 
-    /* Checksum the data if present */
+    /* CRC32 over serialized header */
+    checksum = (uint32_t)crc32(0L, header_buffer, sizeof(header_buffer));
+
+    /* CRC32 over data if present */
     if (data != NULL && data_len > 0) {
-        ptr = (const uint8_t*)data;
-        for (i = 0; i < data_len; i++) {
-            sum += ptr[i];
-        }
+        checksum = (uint32_t)crc32(checksum, (const Bytef*)data, data_len);
     }
 
-    return sum;
+    return checksum;
 }
 
 /**
