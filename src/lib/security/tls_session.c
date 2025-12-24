@@ -200,6 +200,94 @@ SSL* tls_session_create_client(SSL_CTX* ctx, int server_socket) {
     return ssl;
 }
 
+SSL* tls_session_create_client_verified(SSL_CTX* ctx, int server_socket,
+                                        const char* hostname) {
+    SSL* ssl;
+    int ret;
+    int ssl_error;
+
+    /* Validate arguments */
+    if (ctx == NULL) {
+        fprintf(stderr, "SSL context is NULL\n");
+        return NULL;
+    }
+
+    if (server_socket < 0) {
+        fprintf(stderr, "Invalid server socket: %d\n", server_socket);
+        return NULL;
+    }
+
+    if (hostname == NULL || hostname[0] == '\0') {
+        fprintf(stderr, "Hostname is required for verified TLS session\n");
+        return NULL;
+    }
+
+    /* Create new SSL session from context */
+    ssl = SSL_new(ctx);
+    if (ssl == NULL) {
+        tls_print_errors("Failed to create SSL client session");
+        return NULL;
+    }
+
+    /* Bind SSL session to socket file descriptor */
+    if (!SSL_set_fd(ssl, server_socket)) {
+        tls_print_errors("Failed to bind SSL to socket");
+        SSL_free(ssl);
+        return NULL;
+    }
+
+    /* Enable hostname verification */
+    /* SSL_set1_host sets the expected hostname for verification */
+    if (!SSL_set1_host(ssl, hostname)) {
+        tls_print_errors("Failed to set hostname for verification");
+        SSL_free(ssl);
+        return NULL;
+    }
+
+    /* Set SNI (Server Name Indication) for virtual hosting */
+    if (!SSL_set_tlsext_host_name(ssl, hostname)) {
+        tls_print_errors("Failed to set SNI hostname");
+        SSL_free(ssl);
+        return NULL;
+    }
+
+    /* Perform client-side TLS handshake */
+    ret = SSL_connect(ssl);
+    if (ret <= 0) {
+        ssl_error = SSL_get_error(ssl, ret);
+
+        /* Map SSL error to error messages */
+        switch (ssl_error) {
+            case SSL_ERROR_WANT_READ:
+            case SSL_ERROR_WANT_WRITE:
+                fprintf(stderr, "TLS client handshake: unexpected WANT_READ/WANT_WRITE\n");
+                break;
+
+            case SSL_ERROR_ZERO_RETURN:
+                fprintf(stderr, "TLS client handshake: connection closed by server\n");
+                break;
+
+            case SSL_ERROR_SYSCALL:
+                tls_print_errors("TLS client handshake: system call error");
+                break;
+
+            case SSL_ERROR_SSL:
+                tls_print_errors("TLS client handshake: protocol or verification error");
+                break;
+
+            default:
+                tls_print_errors("TLS client handshake: unknown error");
+                break;
+        }
+
+        SSL_free(ssl);
+        return NULL;
+    }
+
+    /* Handshake successful with hostname verification */
+    return ssl;
+}
+
 void tls_session_destroy(SSL* ssl) {
     if (ssl != NULL) {
         SSL_free(ssl);

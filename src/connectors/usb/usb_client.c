@@ -14,10 +14,18 @@
 #include "usb_protocol.h"
 #include "lib/common/definitions.h"
 #include "lib/net/net_resolve.h"
+#include "lib/protocol/wire_format.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <stdint.h>
+#include <limits.h>
+
+/* SIZE_MAX may not be defined in C89, provide fallback */
+#ifndef SIZE_MAX
+#define SIZE_MAX ((size_t)-1)
+#endif
 
 #include <unistd.h>
 #include <sys/socket.h>
@@ -58,6 +66,12 @@ usb_client_t* usb_client_init(const char* server_ip,
 
     /* Validate parameters */
     if (server_ip == NULL || server_port <= 0 || max_devices <= 0) {
+        return NULL;
+    }
+
+    /* SECURITY: Prevent integer overflow in malloc size calculation (USB-001) */
+    /* Check that max_devices * sizeof(usb_device_t) won't overflow size_t */
+    if ((size_t)max_devices > SIZE_MAX / sizeof(usb_device_t)) {
         return NULL;
     }
 
@@ -513,13 +527,14 @@ int usb_client_send_urb(usb_client_t* client,
         return result;
     }
 
-    /* Send packet to server */
-    sent = send(client->socket_fd, &packet, sizeof(xoe_packet_t), 0);
-    if (sent < 0) {
-        fprintf(stderr, "Failed to send URB to server: %s\n", strerror(errno));
+    /* Send packet to server using wire format (LIB-001/NET-006 fix) */
+    result = xoe_wire_send(client->socket_fd, &packet);
+    if (result != 0) {
+        fprintf(stderr, "Failed to send URB to server: error %d\n", result);
         usb_protocol_free_payload(&packet);  /* Free allocated payload */
         return E_NETWORK_ERROR;
     }
+    (void)sent;  /* Suppress unused warning */
 
     /* Update statistics */
     pthread_mutex_lock(&client->lock);
@@ -551,24 +566,31 @@ int usb_client_receive_urb(usb_client_t* client,
         return E_INVALID_ARGUMENT;
     }
 
-    /* Receive packet from server */
-    received = recv(client->socket_fd, &packet, sizeof(xoe_packet_t), 0);
-    if (received < 0) {
-        if (errno == EINTR) {
-            return E_INTERRUPTED;
+    /* Receive packet from server using wire format (LIB-001/NET-006 fix) */
+    result = xoe_wire_recv(client->socket_fd, &packet);
+    if (result != 0) {
+        if (result == E_IO_ERROR) {
+            /* Check if it was an interrupt or connection closed */
+            if (errno == EINTR) {
+                return E_INTERRUPTED;
+            }
+            fprintf(stderr, "Failed to receive URB from server: %s\n",
+                    strerror(errno));
+        } else if (result == E_CHECKSUM_MISMATCH) {
+            fprintf(stderr, "Checksum mismatch receiving URB from server\n");
+        } else {
+            fprintf(stderr, "Failed to receive URB from server: error %d\n",
+                    result);
         }
-        fprintf(stderr, "Failed to receive URB from server: %s\n",
-                strerror(errno));
         return E_NETWORK_ERROR;
     }
-
-    if (received == 0) {
-        /* Connection closed */
-        return E_NETWORK_ERROR;
-    }
+    (void)received;  /* Suppress unused warning */
 
     /* Decapsulate XOE packet into URB */
     result = usb_protocol_decapsulate(&packet, urb_header, data, data_len);
+
+    /* Free wire format allocated payload after decapsulation */
+    xoe_wire_free_payload(&packet);
     if (result != 0) {
         fprintf(stderr, "Failed to decapsulate URB packet: error %d\n",
                 result);
@@ -1064,11 +1086,13 @@ void* usb_client_transfer_thread(void* arg)
         }
     }
 
-    /* Cleanup */
-    usb_transfer_free(transfer_ctx);
-    free(ctx);
-
-    printf("Transfer thread exiting for device %d\n", ctx->device_index + 1);
+    /* Cleanup - save device_index before freeing ctx (USB-003) */
+    {
+        int device_index = ctx->device_index;
+        usb_transfer_free(transfer_ctx);
+        free(ctx);
+        printf("Transfer thread exiting for device %d\n", device_index + 1);
+    }
 
     return NULL;
 }

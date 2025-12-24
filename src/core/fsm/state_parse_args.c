@@ -211,6 +211,22 @@ phase2:
             strncpy(config->key_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
             config->key_path[TLS_CERT_PATH_MAX - 1] = '\0';
             optind += 2;
+        } else if (strcmp(argv[optind], "-ca") == 0 || strcmp(argv[optind], "--ca") == 0) {
+            if (optind + 1 >= argc) {
+                fprintf(stderr, "Option %s requires an argument\n", argv[optind]);
+                print_usage(config->program_name);
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
+            }
+            strncpy(config->ca_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
+            config->ca_path[TLS_CERT_PATH_MAX - 1] = '\0';
+            optind += 2;
+        } else if (strcmp(argv[optind], "--insecure") == 0) {
+            /* Disable TLS certificate verification (not recommended for production) */
+            config->tls_verify_mode = TLS_VERIFY_NONE;
+            fprintf(stderr, "WARNING: TLS certificate verification disabled. "
+                    "Use only for testing.\n");
+            optind += 1;
         } else
 #endif
         if (strcmp(argv[optind], "--parity") == 0) {

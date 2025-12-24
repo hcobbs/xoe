@@ -148,11 +148,7 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
     }
 
     printf("Management interface started on 127.0.0.1:%d\n", server->port);
-    if (server->password_enabled) {
-        printf("Authentication: enabled\n");
-    } else {
-        printf("Authentication: disabled (unauthenticated access allowed)\n");
-    }
+    printf("Authentication: enabled\n");
 
     return server;
 }
@@ -286,17 +282,13 @@ static void* session_handler(void* arg) {
     /* Send welcome (using pre-allocated write_buffer not needed for constants) */
     write(session->socket_fd, welcome, strlen(welcome));
 
-    /* Authenticate if password required */
-    if (session->password[0] != '\0') {
-        if (!authenticate_session(session)) {
-            const char *msg = "Authentication failed\n";
-            write(session->socket_fd, msg, strlen(msg));
-            close(session->socket_fd);
-            release_session_slot(session);
-            pthread_exit(NULL);
-        }
-    } else {
-        session->authenticated = 1;
+    /* Authenticate (always required for security) */
+    if (!authenticate_session(session)) {
+        const char *msg = "Authentication failed\n";
+        write(session->socket_fd, msg, strlen(msg));
+        close(session->socket_fd);
+        release_session_slot(session);
+        pthread_exit(NULL);
     }
 
     /* Main command loop (Phase 5) */
