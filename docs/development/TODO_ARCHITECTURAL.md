@@ -98,3 +98,16 @@ These items were identified in the third-party code review:
 ## History
 
 - 2025-12-07: Document created from code review findings
+- 2025-12-24: Red team security remediation completed (PRs #29-34)
+  - All High/Critical findings addressed
+  - Wire format layer (LIB-001, NET-006)
+  - TLS client certificate verification (TLS-001, TLS-002)
+  - Management authentication with SHA-256 hashing (NET-001 to NET-004)
+  - Rate limiting and constant-time comparison (FSM-005 to FSM-009)
+  - CRC32 checksums for serial/USB protocols (SER-001, USB-002)
+  - Device path validation (SER-002)
+  - Packet framing for serial connector (SER-003)
+  - Race condition fixes in USB client/server (USB-004, USB-008)
+  - Integer overflow and UAF fixes (USB-001, USB-003)
+  - pthread return value checks (USB-009)
+  - Baud rate whitelist validation (FSM-002)
