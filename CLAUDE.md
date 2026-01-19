@@ -26,6 +26,8 @@ This project uses different Claude models optimized for specific task types:
 
 When spawning agents via the Task tool, Claude Code should select the appropriate model based on task complexity and type. This strategy optimizes for capability where it matters most while maintaining cost-effectiveness for routine work.
 
+**Note**: This model selection strategy applies both to xoe and project-wide across all repositories in the workspace.
+
 ## Project Overview
 
 XOE (X over Ethernet) is an extensible framework for encapsulation of various new and legacy protocols into Ethernet-transmissible data. Implements:
@@ -108,7 +110,7 @@ telnet localhost 12345
 4. Create a pull request to merge into `main`
 5. Ensure PR checklist is complete before merging
 
-**Note**: Repository rules require all changes (including documentation) to go through pull requests. Direct commits to `main` are not allowed.
+**CRITICAL**: Repository rules require ALL changes (code, documentation, everything) to go through pull requests. Direct commits to `main` are prohibited with zero exceptions.
 
 **Pre-PR Checklist**:
 - [ ] Code builds successfully: `make`
@@ -279,6 +281,10 @@ socat -d -d pty,raw,echo=0 pty,raw,echo=0
 - Opening braces on same line for functions and control structures
 - Consistent spacing around operators and after keywords
 - Clear, readable code structure preferred over compact formatting
+
+**Punctuation**:
+- **NEVER use em dashes (—).** Use periods, commas, or restructure the sentence. This is non-negotiable.
+- Use the Oxford comma, semicolons, and ellipsis as appropriate
 
 ## Coding Standards and Preferences
 
