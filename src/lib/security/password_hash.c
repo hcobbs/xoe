@@ -38,8 +38,8 @@ static void secure_zero(void* ptr, size_t len)
  */
 static int generate_random_bytes(uint8_t* buffer, size_t len)
 {
-    int fd;
-    ssize_t bytes_read;
+    int fd = 0;
+    ssize_t bytes_read = 0;
     size_t total_read = 0;
 
     fd = open("/dev/urandom", O_RDONLY);
@@ -77,8 +77,8 @@ static void bytes_to_hex(const uint8_t* bytes, size_t len, char* hex_out)
  */
 static int hex_to_bytes(const char* hex, uint8_t* bytes_out, size_t len)
 {
-    size_t i;
-    unsigned int byte;
+    size_t i = 0;
+    unsigned int byte = 0;
 
     for (i = 0; i < len; i++) {
         if (sscanf(hex + (i * 2), "%2x", &byte) != 1) {
@@ -95,9 +95,9 @@ static int hex_to_bytes(const char* hex, uint8_t* bytes_out, size_t len)
 static int compute_hash(const uint8_t* salt, const char* password,
                         uint8_t* hash_out)
 {
-    EVP_MD_CTX* ctx;
-    unsigned int hash_len;
-    size_t password_len;
+    EVP_MD_CTX* ctx = NULL;
+    unsigned int hash_len = 0;
+    size_t password_len = 0;
     int result = 0;
 
     if (salt == NULL || password == NULL || hash_out == NULL) {
@@ -141,7 +141,7 @@ cleanup:
  */
 static int constant_time_compare(const uint8_t* a, const uint8_t* b, size_t len)
 {
-    size_t i;
+    size_t i = 0;
     uint8_t result = 0;
 
     for (i = 0; i < len; i++) {
@@ -153,9 +153,9 @@ static int constant_time_compare(const uint8_t* a, const uint8_t* b, size_t len)
 
 int password_hash(const char* password, char* hash_out)
 {
-    uint8_t salt[PASSWORD_SALT_LEN];
-    uint8_t hash[PASSWORD_HASH_LEN];
-    int result;
+    uint8_t salt[PASSWORD_SALT_LEN] = {0};
+    uint8_t hash[PASSWORD_HASH_LEN] = {0};
+    int result = 0;
 
     if (password == NULL || hash_out == NULL) {
         return E_INVALID_ARGUMENT;
@@ -190,12 +190,12 @@ int password_hash(const char* password, char* hash_out)
 
 int password_verify(const char* password, const char* stored_hash)
 {
-    uint8_t salt[PASSWORD_SALT_LEN];
-    uint8_t stored_hash_bytes[PASSWORD_HASH_LEN];
-    uint8_t computed_hash[PASSWORD_HASH_LEN];
-    int result;
-    int match;
-    size_t hash_len;
+    uint8_t salt[PASSWORD_SALT_LEN] = {0};
+    uint8_t stored_hash_bytes[PASSWORD_HASH_LEN] = {0};
+    uint8_t computed_hash[PASSWORD_HASH_LEN] = {0};
+    int result = 0;
+    int match = 0;
+    size_t hash_len = 0;
 
     if (password == NULL || stored_hash == NULL) {
         return E_INVALID_ARGUMENT;

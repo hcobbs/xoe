@@ -169,8 +169,8 @@ usb_client_t* usb_client_init(const char* server_ip,
 int usb_client_add_device(usb_client_t* client,
                           const usb_config_t* config)
 {
-    int result;
-    usb_device_t* device;
+    int result = 0;
+    usb_device_t* device = NULL;
 
     /* Validate parameters */
     if (client == NULL || config == NULL) {
@@ -214,9 +214,9 @@ int usb_client_add_device(usb_client_t* client,
  */
 static int usb_client_connect(usb_client_t* client)
 {
-    net_resolve_result_t resolve_result;
+    net_resolve_result_t resolve_result = {0};
     char error_buf[256];
-    int result;
+    int result = 0;
 
     /* Resolve hostname/IP and connect to server */
     result = net_resolve_connect(client->server_ip, client->server_port,
@@ -238,7 +238,7 @@ static int usb_client_connect(usb_client_t* client)
  */
 int usb_client_start(usb_client_t* client)
 {
-    int result;
+    int result = 0;
 
     /* Validate parameters */
     if (client == NULL) {
@@ -259,10 +259,10 @@ int usb_client_start(usb_client_t* client)
 
     /* Register all devices with server */
     {
-        int i;
+        int i = 0;
         printf("\nRegistering USB devices with server...\n");
         for (i = 0; i < client->device_count; i++) {
-            uint32_t device_id;
+            uint32_t device_id = 0;
 
             /* Construct device_id from VID:PID */
             device_id = ((uint32_t)client->devices[i].config.vendor_id << 16) |
@@ -317,9 +317,9 @@ int usb_client_start(usb_client_t* client)
 
     /* Spawn per-device transfer threads */
     {
-        int i;
+        int i = 0;
         for (i = 0; i < client->device_count; i++) {
-            usb_transfer_thread_ctx_t* ctx;
+            usb_transfer_thread_ctx_t* ctx = NULL;
 
             /* Allocate thread context */
             ctx = (usb_transfer_thread_ctx_t*)malloc(
@@ -368,9 +368,9 @@ int usb_client_wait(usb_client_t* client)
     /* Phase 5: Wait for shutdown with periodic timeout cleanup */
     pthread_mutex_lock(&client->lock);
     while (!client->shutdown_requested) {
-        struct timespec timeout;
-        struct timeval now;
-        int wait_result;
+        struct timespec timeout = {0};
+        struct timeval now = {0};
+        int wait_result = 0;
 
         /* Wait for 1 second or until shutdown */
         gettimeofday(&now, NULL);
@@ -402,7 +402,7 @@ int usb_client_wait(usb_client_t* client)
  */
 int usb_client_stop(usb_client_t* client)
 {
-    int i;
+    int i = 0;
 
     if (client == NULL) {
         return E_INVALID_ARGUMENT;
@@ -432,8 +432,8 @@ int usb_client_stop(usb_client_t* client)
     if (client->socket_fd >= 0) {
         printf("Unregistering devices from server...\n");
         for (i = 0; i < client->device_count; i++) {
-            uint32_t device_id;
-            int result;
+            uint32_t device_id = 0;
+            int result = 0;
 
             device_id = ((uint32_t)client->devices[i].config.vendor_id << 16) |
                         client->devices[i].config.product_id;
@@ -468,7 +468,7 @@ int usb_client_stop(usb_client_t* client)
  */
 void usb_client_cleanup(usb_client_t* client)
 {
-    int i;
+    int i = 0;
 
     if (client == NULL) {
         return;
@@ -497,7 +497,7 @@ void usb_client_cleanup(usb_client_t* client)
     /* Phase 5: Clean up any remaining pending requests */
     {
         usb_pending_request_t* req = client->pending_head;
-        usb_pending_request_t* next;
+        usb_pending_request_t* next = NULL;
         while (req != NULL) {
             next = req->next;
             pthread_mutex_destroy(&req->mutex);
@@ -530,9 +530,9 @@ int usb_client_send_urb(usb_client_t* client,
                         const void* data,
                         uint32_t data_len)
 {
-    xoe_packet_t packet;
-    int result;
-    ssize_t sent;
+    xoe_packet_t packet = {0};
+    int result = 0;
+    ssize_t sent = 0;
 
     /* Validate parameters */
     if (client == NULL || urb_header == NULL) {
@@ -579,9 +579,9 @@ int usb_client_receive_urb(usb_client_t* client,
                            void* data,
                            uint32_t* data_len)
 {
-    xoe_packet_t packet;
-    ssize_t received;
-    int result;
+    xoe_packet_t packet = {0};
+    ssize_t received = 0;
+    int result = 0;
 
     /* Validate parameters */
     if (client == NULL || urb_header == NULL || data_len == NULL) {
@@ -636,9 +636,9 @@ int usb_client_register_device(usb_client_t* client,
                                 uint32_t device_id,
                                 unsigned int timeout_ms)
 {
-    usb_urb_header_t reg_urb, response_urb;
-    uint32_t response_len;
-    int result;
+    usb_urb_header_t reg_urb = {0}, response_urb = {0};
+    uint32_t response_len = 0;
+    int result = 0;
 
     /* Validate parameters */
     if (client == NULL) {
@@ -662,7 +662,7 @@ int usb_client_register_device(usb_client_t* client,
     /* Wait for registration response (with timeout) */
     /* Set socket receive timeout to prevent indefinite blocking */
     if (timeout_ms > 0) {
-        struct timeval tv;
+        struct timeval tv = {0};
         tv.tv_sec = timeout_ms / 1000;
         tv.tv_usec = (timeout_ms % 1000) * 1000;
         if (setsockopt(client->socket_fd, SOL_SOCKET, SO_RCVTIMEO,
@@ -677,7 +677,7 @@ int usb_client_register_device(usb_client_t* client,
 
     /* Restore socket to blocking mode (no timeout) after receive */
     if (timeout_ms > 0) {
-        struct timeval tv;
+        struct timeval tv = {0};
         tv.tv_sec = 0;
         tv.tv_usec = 0;
         setsockopt(client->socket_fd, SOL_SOCKET, SO_RCVTIMEO,
@@ -720,9 +720,9 @@ int usb_client_register_device(usb_client_t* client,
 int usb_client_unregister_device(usb_client_t* client,
                                   uint32_t device_id)
 {
-    usb_urb_header_t unreg_urb, response_urb;
-    uint32_t response_len;
-    int result;
+    usb_urb_header_t unreg_urb = {0}, response_urb = {0};
+    uint32_t response_len = 0;
+    int result = 0;
 
     /* Validate parameters */
     if (client == NULL) {
@@ -793,8 +793,8 @@ int usb_client_submit_urb_sync(usb_client_t* client,
                                 unsigned int timeout_ms)
 {
     usb_pending_request_t* request = NULL;
-    uint32_t seqnum;
-    int result;
+    uint32_t seqnum = 0;
+    int result = 0;
 
     /* Validate parameters */
     if (client == NULL || urb_header == NULL) {
@@ -864,11 +864,11 @@ int usb_client_submit_urb_sync(usb_client_t* client,
 void* usb_client_network_thread(void* arg)
 {
     usb_client_t* client = (usb_client_t*)arg;
-    usb_urb_header_t urb_header;
+    usb_urb_header_t urb_header = {0};
     unsigned char data_buffer[USB_MAX_TRANSFER_SIZE];
-    uint32_t data_len;
-    int result;
-    int running;
+    uint32_t data_len = 0;
+    int result = 0;
+    int running = 0;
 
     printf("Network receive thread started\n");
 
@@ -934,13 +934,13 @@ void* usb_client_network_thread(void* arg)
 void* usb_client_transfer_thread(void* arg)
 {
     usb_transfer_thread_ctx_t* ctx = (usb_transfer_thread_ctx_t*)arg;
-    usb_client_t* client;
-    usb_device_t* device;
+    usb_client_t* client = NULL;
+    usb_device_t* device = NULL;
     usb_transfer_ctx_t* transfer_ctx = NULL;
     unsigned char buffer[USB_MAX_TRANSFER_SIZE];
-    int result;
-    int running;
-    usb_urb_header_t urb_header;
+    int result = 0;
+    int running = 0;
+    usb_urb_header_t urb_header = {0};
 
     if (ctx == NULL) {
         return NULL;
@@ -981,6 +981,7 @@ void* usb_client_transfer_thread(void* arg)
 
         if (device->config.bulk_in_endpoint != USB_NO_ENDPOINT) {
             int transferred = 0;
+            (void)transferred;  /* Used below */
 
             /* Perform synchronous bulk read */
             result = usb_transfer_bulk_read(
@@ -1038,6 +1039,7 @@ void* usb_client_transfer_thread(void* arg)
         if (device->config.bulk_out_endpoint != USB_NO_ENDPOINT) {
             unsigned char out_buffer[USB_MAX_TRANSFER_SIZE];
             uint32_t actual_len = 0;
+            (void)actual_len;  /* Used below */
 
             /* Prepare OUT request URB */
             memset(&urb_header, 0, sizeof(usb_urb_header_t));
@@ -1075,6 +1077,7 @@ void* usb_client_transfer_thread(void* arg)
             /* Write received data to USB device */
             if (actual_len > 0) {
                 int transferred = 0;
+                (void)transferred;  /* Used below */
 
                 result = usb_transfer_bulk_write(
                     device,
@@ -1150,7 +1153,7 @@ void usb_client_print_stats(const usb_client_t* client)
  */
 int usb_client_is_running(const usb_client_t* client)
 {
-    int running;
+    int running = 0;
 
     if (client == NULL) {
         return FALSE;
@@ -1172,7 +1175,7 @@ int usb_client_is_running(const usb_client_t* client)
  */
 uint32_t usb_client_alloc_seqnum(usb_client_t* client)
 {
-    uint32_t seqnum;
+    uint32_t seqnum = 0;
 
     if (client == NULL) {
         return 0;
@@ -1198,7 +1201,7 @@ usb_pending_request_t* usb_client_create_pending_request(
     unsigned int timeout_ms
 )
 {
-    usb_pending_request_t* request;
+    usb_pending_request_t* request = NULL;
 
     /* Validate parameters */
     if (client == NULL) {
@@ -1250,6 +1253,7 @@ int usb_client_wait_pending_request(
 )
 {
     int result = 0;
+    (void)result;  /* Initialize and used below */
 
     /* Validate parameters */
     if (client == NULL || request == NULL) {
@@ -1258,8 +1262,8 @@ int usb_client_wait_pending_request(
 
     /* Wait with timeout using condition variable */
     {
-        struct timespec abs_timeout;
-        struct timeval now;
+        struct timespec abs_timeout = {0};
+        struct timeval now = {0};
         unsigned long timeout_ms = request->timeout_ms;
 
         gettimeofday(&now, NULL);
@@ -1275,9 +1279,10 @@ int usb_client_wait_pending_request(
 
         pthread_mutex_lock(&request->mutex);
         while (!request->completed && result == 0) {
-            int wait_result = pthread_cond_timedwait(&request->cond,
-                                                     &request->mutex,
-                                                     &abs_timeout);
+            int wait_result = 0;
+            wait_result = pthread_cond_timedwait(&request->cond,
+                                                 &request->mutex,
+                                                 &abs_timeout);
             if (wait_result == ETIMEDOUT) {
                 result = E_TIMEOUT;
             } else if (wait_result != 0) {
@@ -1301,7 +1306,7 @@ int usb_client_complete_pending_request(
     int32_t status
 )
 {
-    usb_pending_request_t* request;
+    usb_pending_request_t* request = NULL;
     int found = FALSE;
 
     /* Validate parameters */
@@ -1357,8 +1362,8 @@ void usb_client_free_pending_request(
     usb_pending_request_t* request
 )
 {
-    usb_pending_request_t* prev;
-    usb_pending_request_t* curr;
+    usb_pending_request_t* prev = NULL;
+    usb_pending_request_t* curr = NULL;
 
     if (client == NULL || request == NULL) {
         return;
@@ -1400,10 +1405,10 @@ void usb_client_free_pending_request(
  */
 int usb_client_cleanup_timeouts(usb_client_t* client)
 {
-    usb_pending_request_t* request;
-    usb_pending_request_t* next;
-    usb_pending_request_t* prev;
-    unsigned long current_time;
+    usb_pending_request_t* request = NULL;
+    usb_pending_request_t* next = NULL;
+    usb_pending_request_t* prev = NULL;
+    unsigned long current_time = 0;
     int timeout_count = 0;
 
     if (client == NULL) {

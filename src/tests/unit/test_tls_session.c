@@ -20,7 +20,8 @@
  * SSL_CTX pointer.
  */
 void test_session_create_null_context(void) {
-    SSL* session = tls_session_create(NULL, 0);
+    SSL* session = NULL;
+    session = tls_session_create(NULL, 0);
     TEST_ASSERT_NULL(session, "Session create should fail with NULL context");
 }
 
@@ -31,8 +32,8 @@ void test_session_create_null_context(void) {
  * Note: This test creates a session object but handshake will fail.
  */
 void test_session_create_invalid_socket(void) {
-    SSL_CTX* ctx;
-    SSL* session;
+    SSL_CTX* ctx = NULL;
+    SSL* session = NULL;
 
     ctx = tls_context_init("./certs/server.crt", "./certs/server.key", ENCRYPT_TLS13);
     if (ctx == NULL) {
@@ -52,7 +53,8 @@ void test_session_create_invalid_socket(void) {
  * Verifies that tls_session_shutdown() safely handles NULL pointer.
  */
 void test_session_shutdown_null(void) {
-    int result = tls_session_shutdown(NULL);
+    int result = 0;
+    result = tls_session_shutdown(NULL);
     TEST_ASSERT(result < 0, "Session shutdown should return error for NULL session");
 }
 

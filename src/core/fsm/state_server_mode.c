@@ -60,10 +60,10 @@ static void server_signal_handler(int signum) {
 xoe_state_t state_server_mode(xoe_config_t *config) {
     int server_fd = 0;
     int new_socket = 0;
-    struct sockaddr_in address;
+    struct sockaddr_in address = {0};
     int addrlen = sizeof(address);
     client_info_t *client_info = NULL;
-    pthread_t thread_id;
+    pthread_t thread_id = 0;
 
 #if TLS_ENABLED
     /* Initialize TLS context before accepting connections (if encryption enabled) */
@@ -177,9 +177,9 @@ xoe_state_t state_server_mode(xoe_config_t *config) {
 
     /* Main accept loop */
     while (!g_server_shutdown) {
-        fd_set readfds;
-        struct timeval timeout;
-        int select_result;
+        fd_set readfds = {0};
+        struct timeval timeout = {0};
+        int select_result = 0;
 
         /* Use select() with timeout to allow signal checking */
         FD_ZERO(&readfds);

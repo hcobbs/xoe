@@ -25,7 +25,7 @@
  * Verifies that serial_buffer_init() with capacity=0 uses the default size.
  */
 void test_buffer_init_default_size(void) {
-    serial_buffer_t buffer;
+    serial_buffer_t buffer = {0};
     int result = serial_buffer_init(&buffer, 0);
     TEST_ASSERT_SUCCESS(result, "Default size initialization should succeed");
     TEST_ASSERT_EQUAL(SERIAL_BUFFER_DEFAULT_SIZE, serial_buffer_free_space(&buffer),
@@ -39,7 +39,7 @@ void test_buffer_init_default_size(void) {
  * Verifies that serial_buffer_init() correctly creates a buffer with custom size.
  */
 void test_buffer_init_custom_size(void) {
-    serial_buffer_t buffer;
+    serial_buffer_t buffer = {0};
     int result = serial_buffer_init(&buffer, TEST_SMALL_SIZE);
     TEST_ASSERT_SUCCESS(result, "Custom size initialization should succeed");
     TEST_ASSERT_EQUAL(TEST_SMALL_SIZE, serial_buffer_free_space(&buffer),
@@ -65,7 +65,7 @@ void test_buffer_init_null_pointer(void) {
  * Verifies that serial_buffer_init() handles small capacity (edge case).
  */
 void test_buffer_init_small_capacity(void) {
-    serial_buffer_t buffer;
+    serial_buffer_t buffer = {0};
     int result = serial_buffer_init(&buffer, 1);
     TEST_ASSERT_SUCCESS(result, "Small capacity initialization should succeed");
     TEST_ASSERT_EQUAL(1, serial_buffer_free_space(&buffer),
@@ -79,10 +79,10 @@ void test_buffer_init_small_capacity(void) {
  * Verifies basic write/read cycle with small data.
  */
 void test_buffer_simple_write_read(void) {
-    serial_buffer_t buffer;
-    unsigned char write_data[TEST_DATA_SIZE];
-    unsigned char read_data[TEST_DATA_SIZE];
-    int i, write_result, read_result;
+    serial_buffer_t buffer = {0};
+    unsigned char write_data[TEST_DATA_SIZE] = {0};
+    unsigned char read_data[TEST_DATA_SIZE] = {0};
+    int i = 0, write_result = 0, read_result = 0;
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -114,10 +114,10 @@ void test_buffer_simple_write_read(void) {
  * Verifies that buffer can handle multiple sequential operations.
  */
 void test_buffer_multiple_cycles(void) {
-    serial_buffer_t buffer;
-    unsigned char write_data[32];
-    unsigned char read_data[32];
-    int cycle, i;
+    serial_buffer_t buffer = {0};
+    unsigned char write_data[32] = {0};
+    unsigned char read_data[32] = {0};
+    int cycle = 0, i = 0;
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -145,9 +145,9 @@ void test_buffer_multiple_cycles(void) {
  * if the buffer is closed (non-blocking test variant).
  */
 void test_buffer_read_empty_closed(void) {
-    serial_buffer_t buffer;
-    unsigned char read_data[32];
-    int result;
+    serial_buffer_t buffer = {0};
+    unsigned char read_data[32] = {0};
+    int result = 0;
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
     serial_buffer_close(&buffer);
@@ -183,10 +183,10 @@ void test_buffer_write_partial_DISABLED(void) {
  * Verifies that buffer correctly wraps around when reaching the end.
  */
 void test_buffer_wrap_around(void) {
-    serial_buffer_t buffer;
-    unsigned char write_data[64];
-    unsigned char read_data[64];
-    int i;
+    serial_buffer_t buffer = {0};
+    unsigned char write_data[64] = {0};
+    unsigned char read_data[64] = {0};
+    int i = 0;
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -221,10 +221,10 @@ void test_buffer_wrap_around(void) {
  * Verifies buffer behavior at exact capacity boundary.
  */
 void test_buffer_boundary(void) {
-    serial_buffer_t buffer;
-    unsigned char write_data[TEST_SMALL_SIZE];
-    unsigned char read_data[TEST_SMALL_SIZE];
-    int i, write_result;
+    serial_buffer_t buffer = {0};
+    unsigned char write_data[TEST_SMALL_SIZE] = {0};
+    unsigned char read_data[TEST_SMALL_SIZE] = {0};
+    int i = 0, write_result = 0;
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -260,8 +260,8 @@ void test_buffer_boundary(void) {
  * Verifies that serial_buffer_available() returns correct count.
  */
 void test_buffer_query_available(void) {
-    serial_buffer_t buffer;
-    unsigned char write_data[64];
+    serial_buffer_t buffer = {0};
+    unsigned char write_data[64] = {0};
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -281,8 +281,8 @@ void test_buffer_query_available(void) {
  * Verifies that serial_buffer_free_space() returns correct count.
  */
 void test_buffer_query_free_space(void) {
-    serial_buffer_t buffer;
-    unsigned char write_data[64];
+    serial_buffer_t buffer = {0};
+    unsigned char write_data[64] = {0};
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -302,7 +302,7 @@ void test_buffer_query_free_space(void) {
  * Verifies that serial_buffer_close() marks buffer as closed.
  */
 void test_buffer_close(void) {
-    serial_buffer_t buffer;
+    serial_buffer_t buffer = {0};
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -323,7 +323,7 @@ void test_buffer_close(void) {
  * Verifies that serial_buffer_is_closed() works correctly.
  */
 void test_buffer_is_closed(void) {
-    serial_buffer_t buffer;
+    serial_buffer_t buffer = {0};
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
     TEST_ASSERT_EQUAL(FALSE, serial_buffer_is_closed(&buffer),
@@ -342,9 +342,9 @@ void test_buffer_is_closed(void) {
  * Verifies that writes fail after buffer is closed.
  */
 void test_buffer_write_after_close(void) {
-    serial_buffer_t buffer;
-    unsigned char write_data[32];
-    int result;
+    serial_buffer_t buffer = {0};
+    unsigned char write_data[32] = {0};
+    int result = 0;
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
     serial_buffer_close(&buffer);
@@ -361,10 +361,10 @@ void test_buffer_write_after_close(void) {
  * Verifies that reads continue to work after close until buffer is drained.
  */
 void test_buffer_read_after_close_with_data(void) {
-    serial_buffer_t buffer;
-    unsigned char write_data[64];
-    unsigned char read_data[64];
-    int i, read_result;
+    serial_buffer_t buffer = {0};
+    unsigned char write_data[64] = {0};
+    unsigned char read_data[64] = {0};
+    int i = 0, read_result = 0;
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -404,8 +404,8 @@ void test_buffer_destroy_null(void) {
  * Verifies that write operation fails with NULL data pointer.
  */
 void test_buffer_write_null_data(void) {
-    serial_buffer_t buffer;
-    int result;
+    serial_buffer_t buffer = {0};
+    int result = 0;
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -423,8 +423,8 @@ void test_buffer_write_null_data(void) {
  * Verifies that read operation fails with NULL data pointer.
  */
 void test_buffer_read_null_data(void) {
-    serial_buffer_t buffer;
-    int result;
+    serial_buffer_t buffer = {0};
+    int result = 0;
 
     serial_buffer_init(&buffer, TEST_SMALL_SIZE);
 
@@ -442,7 +442,8 @@ void test_buffer_read_null_data(void) {
  * Verifies that query functions handle NULL safely.
  */
 void test_buffer_available_null(void) {
-    uint32_t result = serial_buffer_available(NULL);
+    uint32_t result = 0;
+    result = serial_buffer_available(NULL);
     TEST_ASSERT_EQUAL(0, result, "available(NULL) should return 0");
 }
 
@@ -452,7 +453,8 @@ void test_buffer_available_null(void) {
  * Verifies that query functions handle NULL safely.
  */
 void test_buffer_free_space_null(void) {
-    uint32_t result = serial_buffer_free_space(NULL);
+    uint32_t result = 0;
+    result = serial_buffer_free_space(NULL);
     TEST_ASSERT_EQUAL(0, result, "free_space(NULL) should return 0");
 }
 

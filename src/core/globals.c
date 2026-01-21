@@ -42,7 +42,7 @@ void mgmt_restart_clear(void) {
  * Check if restart is requested (thread-safe)
  */
 int mgmt_restart_is_requested(void) {
-    int result;
+    int result = 0;
     pthread_mutex_lock(&g_restart_mutex);
     result = g_mgmt_restart_requested_internal;
     pthread_mutex_unlock(&g_restart_mutex);
@@ -55,7 +55,7 @@ int mgmt_restart_is_requested(void) {
  * Clears the flag if it was set.
  */
 int mgmt_restart_check_and_clear(void) {
-    int result;
+    int result = 0;
     pthread_mutex_lock(&g_restart_mutex);
     result = g_mgmt_restart_requested_internal;
     if (result) {

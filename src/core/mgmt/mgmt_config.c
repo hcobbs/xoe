@@ -14,8 +14,8 @@
 
 /* Helper function to copy string (handles NULL) */
 static char* copy_string(const char *src) {
-    char *dst;
-    size_t len;
+    char *dst = NULL;
+    size_t len = 0;
     if (src == NULL) {
         return NULL;
     }
@@ -100,8 +100,8 @@ static int copy_config(xoe_config_t *dst, const xoe_config_t *src) {
  * Initialize configuration manager
  */
 mgmt_config_manager_t* mgmt_config_init(const xoe_config_t *initial_config) {
-    mgmt_config_manager_t *mgr;
-    int mutex_result;
+    mgmt_config_manager_t *mgr = NULL;
+    int mutex_result = 0;
 
     if (initial_config == NULL) {
         return NULL;
@@ -188,7 +188,7 @@ void mgmt_config_destroy(mgmt_config_manager_t *mgr) {
  * Check if pending configuration exists
  */
 int mgmt_config_has_pending(mgmt_config_manager_t *mgr) {
-    int result;
+    int result = 0;
 
     if (mgr == NULL) {
         return 0;
@@ -229,7 +229,7 @@ int mgmt_config_apply_pending(mgmt_config_manager_t *mgr) {
  * Clear pending configuration
  */
 void mgmt_config_clear_pending(mgmt_config_manager_t *mgr) {
-    int result;
+    int result = 0;
 
     if (mgr == NULL) {
         return;
@@ -256,7 +256,7 @@ void mgmt_config_clear_pending(mgmt_config_manager_t *mgr) {
  */
 int mgmt_config_validate_pending(mgmt_config_manager_t *mgr,
                                   char *error_buf, size_t error_buf_size) {
-    xoe_config_t temp_config;
+    xoe_config_t temp_config = {0};
 
     if (mgr == NULL || error_buf == NULL || error_buf_size == 0) {
         return -1;
@@ -403,7 +403,7 @@ int mgmt_config_validate_pending(mgmt_config_manager_t *mgr,
 /* Configuration Getters (read active configuration) */
 
 xoe_mode_t mgmt_config_get_mode(mgmt_config_manager_t *mgr) {
-    xoe_mode_t mode;
+    xoe_mode_t mode = MODE_HELP;
 
     if (mgr == NULL) {
         return MODE_HELP;
@@ -417,7 +417,7 @@ xoe_mode_t mgmt_config_get_mode(mgmt_config_manager_t *mgr) {
 }
 
 const char* mgmt_config_get_listen_address(mgmt_config_manager_t *mgr) {
-    const char *address;
+    const char *address = NULL;
 
     if (mgr == NULL) {
         return NULL;
@@ -431,7 +431,7 @@ const char* mgmt_config_get_listen_address(mgmt_config_manager_t *mgr) {
 }
 
 int mgmt_config_get_listen_port(mgmt_config_manager_t *mgr) {
-    int port;
+    int port = -1;
 
     if (mgr == NULL) {
         return -1;
@@ -445,7 +445,7 @@ int mgmt_config_get_listen_port(mgmt_config_manager_t *mgr) {
 }
 
 const char* mgmt_config_get_connect_address(mgmt_config_manager_t *mgr) {
-    const char *address;
+    const char *address = NULL;
 
     if (mgr == NULL) {
         return NULL;
@@ -459,7 +459,7 @@ const char* mgmt_config_get_connect_address(mgmt_config_manager_t *mgr) {
 }
 
 int mgmt_config_get_connect_port(mgmt_config_manager_t *mgr) {
-    int port;
+    int port = -1;
 
     if (mgr == NULL) {
         return -1;
@@ -473,7 +473,7 @@ int mgmt_config_get_connect_port(mgmt_config_manager_t *mgr) {
 }
 
 int mgmt_config_get_encryption(mgmt_config_manager_t *mgr) {
-    int mode;
+    int mode = -1;
 
     if (mgr == NULL) {
         return -1;
@@ -510,7 +510,7 @@ int mgmt_config_set_mode(mgmt_config_manager_t *mgr, xoe_mode_t mode) {
 
 int mgmt_config_set_listen_address(mgmt_config_manager_t *mgr,
                                     const char *address) {
-    char *new_address;
+    char *new_address = NULL;
 
     if (mgr == NULL) {
         return -1;
@@ -547,7 +547,7 @@ int mgmt_config_set_listen_port(mgmt_config_manager_t *mgr, int port) {
 
 int mgmt_config_set_connect_address(mgmt_config_manager_t *mgr,
                                      const char *address) {
-    char *new_address;
+    char *new_address = NULL;
 
     if (mgr == NULL || address == NULL) {
         return -1;
@@ -605,7 +605,7 @@ int mgmt_config_set_encryption(mgmt_config_manager_t *mgr, int mode) {
 
 int mgmt_config_set_serial_device(mgmt_config_manager_t *mgr,
                                    const char *device) {
-    char *new_device;
+    char *new_device = NULL;
 
     if (mgr == NULL || device == NULL) {
         return -1;

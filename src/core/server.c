@@ -66,7 +66,7 @@ usb_server_t* g_usb_server = NULL;
  * Returns: Pointer to available client_info_t slot, or NULL if pool is full
  */
 client_info_t* acquire_client_slot(void) {
-    int i;
+    int i = 0;
     client_info_t *slot = NULL;
 
     pthread_mutex_lock(&pool_mutex);
@@ -99,7 +99,7 @@ void release_client_slot(client_info_t *slot) {
  * init_client_pool - Initialize the global client pool
  */
 void init_client_pool(void) {
-    int i;
+    int i = 0;
     for (i = 0; i < MAX_CLIENTS; i++) {
         client_pool[i].in_use = 0;
         client_pool[i].client_socket = -1;
@@ -126,10 +126,10 @@ void init_client_pool(void) {
  * per CONN_RATE_LIMIT_WINDOW seconds per IP address.
  */
 int check_connection_rate_limit(in_addr_t ip) {
-    int i;
+    int i = 0;
     int found = -1;
     int empty = -1;
-    time_t now;
+    time_t now = 0;
     int allowed = 1;
 
     now = time(NULL);
@@ -188,8 +188,8 @@ void *handle_client(void *arg) {
     client_info_t *client_info = (client_info_t *)arg;
     int client_socket = client_info->client_socket;
     struct sockaddr_in client_addr = client_info->client_addr;
-    char client_ip[INET_ADDRSTRLEN];
-    int bytes_received;
+    char client_ip[INET_ADDRSTRLEN] = {0};
+    int bytes_received = 0;
 
 #if TLS_ENABLED
     SSL* tls = NULL;
@@ -218,8 +218,8 @@ void *handle_client(void *arg) {
     /* Protocol handling loop - detect and route based on protocol */
     /* Uses wire format for secure packet serialization (LIB-001/NET-006 fix) */
     while (1) {
-        xoe_packet_t packet;
-        int recv_result;
+        xoe_packet_t packet = {0};
+        int recv_result = 0;
 
 #if TLS_ENABLED
         if (tls != NULL) {
@@ -325,7 +325,7 @@ cleanup:
  * exit when they detect the closed socket.
  */
 void disconnect_all_clients(void) {
-    int i;
+    int i = 0;
     int disconnected = 0;
 
     pthread_mutex_lock(&pool_mutex);
@@ -361,7 +361,7 @@ void disconnect_all_clients(void) {
 int wait_for_clients(int timeout_sec) {
     int elapsed = 0;
     int active = 0;
-    int i;
+    int i = 0;
 
     while (elapsed < timeout_sec) {
         active = 0;
@@ -409,7 +409,7 @@ int wait_for_clients(int timeout_sec) {
  */
 int get_active_client_count(void) {
     int count = 0;
-    int i;
+    int i = 0;
 
     pthread_mutex_lock(&pool_mutex);
     for (i = 0; i < MAX_CLIENTS; i++) {

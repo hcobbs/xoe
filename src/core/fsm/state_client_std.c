@@ -44,8 +44,8 @@ xoe_state_t state_client_std(xoe_config_t *config) {
     int sock = -1;
     char buffer[BUFFER_SIZE] = {0};
     int bytes_received = 0;
-    net_resolve_result_t resolve_result;
-    char error_buf[256];
+    net_resolve_result_t resolve_result = {0};
+    char error_buf[256] = {0};
 #if TLS_ENABLED
     SSL_CTX* tls_ctx = NULL;
     SSL* tls = NULL;
@@ -75,7 +75,7 @@ xoe_state_t state_client_std(xoe_config_t *config) {
 
         tls = tls_session_create_client(tls_ctx, sock);
         if (tls == NULL) {
-            struct linger linger_opt;
+            struct linger linger_opt = {0};
             fprintf(stderr, "TLS handshake failed\n");
             tls_context_cleanup(tls_ctx);
             /* Set SO_LINGER to 0 to avoid blocking on close() after failed handshake */

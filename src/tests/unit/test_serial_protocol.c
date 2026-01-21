@@ -23,9 +23,9 @@
  * Verifies that serial_protocol_encapsulate() creates a valid packet.
  */
 void test_encapsulate_basic(void) {
-    unsigned char test_data[TEST_DATA_SIZE];
-    xoe_packet_t packet;
-    int i, result;
+    unsigned char test_data[TEST_DATA_SIZE] = {0};
+    xoe_packet_t packet = {0};
+    int i = 0, result = 0;
 
     /* Fill test data */
     for (i = 0; i < TEST_DATA_SIZE; i++) {
@@ -49,9 +49,9 @@ void test_encapsulate_basic(void) {
  * Verifies that encapsulating maximum allowed data size works.
  */
 void test_encapsulate_max_payload(void) {
-    unsigned char test_data[SERIAL_MAX_PAYLOAD_SIZE];
-    xoe_packet_t packet;
-    int i, result;
+    unsigned char test_data[SERIAL_MAX_PAYLOAD_SIZE] = {0};
+    xoe_packet_t packet = {0};
+    int i = 0, result = 0;
 
     for (i = 0; i < SERIAL_MAX_PAYLOAD_SIZE; i++) {
         test_data[i] = (unsigned char)(i % 256);
@@ -72,9 +72,9 @@ void test_encapsulate_max_payload(void) {
  * Verifies that encapsulating zero bytes is handled correctly.
  */
 void test_encapsulate_empty_payload(void) {
-    unsigned char test_data[1];
-    xoe_packet_t packet;
-    int result;
+    unsigned char test_data[1] = {0};
+    xoe_packet_t packet = {0};
+    int result = 0;
 
     result = serial_protocol_encapsulate(test_data, 0, 0, 0, &packet);
 
@@ -89,8 +89,8 @@ void test_encapsulate_empty_payload(void) {
  * Verifies that encapsulation fails with NULL data.
  */
 void test_encapsulate_null_data(void) {
-    xoe_packet_t packet;
-    int result;
+    xoe_packet_t packet = {0};
+    int result = 0;
 
     result = serial_protocol_encapsulate(NULL, 10, 0, 0, &packet);
 
@@ -105,8 +105,8 @@ void test_encapsulate_null_data(void) {
  * Verifies that encapsulation fails with NULL output packet.
  */
 void test_encapsulate_null_packet(void) {
-    unsigned char test_data[10];
-    int result;
+    unsigned char test_data[10] = {0};
+    int result = 0;
 
     result = serial_protocol_encapsulate(test_data, 10, 0, 0, NULL);
 
@@ -121,9 +121,9 @@ void test_encapsulate_null_packet(void) {
  * Verifies that encapsulation fails when data exceeds maximum.
  */
 void test_encapsulate_oversized(void) {
-    unsigned char test_data[SERIAL_MAX_PAYLOAD_SIZE + 100];
-    xoe_packet_t packet;
-    int result;
+    unsigned char test_data[SERIAL_MAX_PAYLOAD_SIZE + 100] = {0};
+    xoe_packet_t packet = {0};
+    int result = 0;
 
     result = serial_protocol_encapsulate(test_data,
                                           SERIAL_MAX_PAYLOAD_SIZE + 1,
@@ -140,10 +140,10 @@ void test_encapsulate_oversized(void) {
  * Verifies that status flags are properly encoded.
  */
 void test_encapsulate_with_flags(void) {
-    unsigned char test_data[32];
-    xoe_packet_t packet;
+    unsigned char test_data[32] = {0};
+    xoe_packet_t packet = {0};
     uint16_t flags = SERIAL_FLAG_PARITY_ERROR | SERIAL_FLAG_XON;
-    int result;
+    int result = 0;
 
     result = serial_protocol_encapsulate(test_data, 32, 0, flags, &packet);
 
@@ -158,10 +158,10 @@ void test_encapsulate_with_flags(void) {
  * Verifies that sequence numbers are properly handled.
  */
 void test_encapsulate_sequence(void) {
-    unsigned char test_data[32];
-    xoe_packet_t packet;
+    unsigned char test_data[32] = {0};
+    xoe_packet_t packet = {0};
     uint16_t sequence = 12345;
-    int result;
+    int result = 0;
 
     result = serial_protocol_encapsulate(test_data, 32, sequence, 0, &packet);
 
@@ -176,12 +176,12 @@ void test_encapsulate_sequence(void) {
  * Verifies that serial_protocol_decapsulate() correctly extracts data.
  */
 void test_decapsulate_basic(void) {
-    unsigned char test_data[TEST_DATA_SIZE];
-    unsigned char output_data[TEST_DATA_SIZE];
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence, flags;
-    int i, result;
+    unsigned char test_data[TEST_DATA_SIZE] = {0};
+    unsigned char output_data[TEST_DATA_SIZE] = {0};
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0, flags = 0;
+    int i = 0, result = 0;
 
     /* Fill test data */
     for (i = 0; i < TEST_DATA_SIZE; i++) {
@@ -212,10 +212,10 @@ void test_decapsulate_basic(void) {
  * Verifies that decapsulation fails with NULL input.
  */
 void test_decapsulate_null_packet(void) {
-    unsigned char output_data[64];
-    uint32_t actual_len;
-    uint16_t sequence, flags;
-    int result;
+    unsigned char output_data[64] = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0, flags = 0;
+    int result = 0;
 
     result = serial_protocol_decapsulate(NULL, output_data, 64,
                                           &actual_len, &sequence, &flags);
@@ -231,11 +231,11 @@ void test_decapsulate_null_packet(void) {
  * Verifies that decapsulation fails with NULL output.
  */
 void test_decapsulate_null_output(void) {
-    unsigned char test_data[32];
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence, flags;
-    int result;
+    unsigned char test_data[32] = {0};
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0, flags = 0;
+    int result = 0;
 
     serial_protocol_encapsulate(test_data, 32, 0, 0, &packet);
 
@@ -255,12 +255,12 @@ void test_decapsulate_null_output(void) {
  * Verifies that decapsulation fails when output buffer is insufficient.
  */
 void test_decapsulate_buffer_too_small(void) {
-    unsigned char test_data[TEST_DATA_SIZE];
-    unsigned char output_data[TEST_DATA_SIZE / 2];
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence, flags;
-    int result;
+    unsigned char test_data[TEST_DATA_SIZE] = {0};
+    unsigned char output_data[TEST_DATA_SIZE / 2] = {0};
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0, flags = 0;
+    int result = 0;
 
     serial_protocol_encapsulate(test_data, TEST_DATA_SIZE, 0, 0, &packet);
 
@@ -281,12 +281,12 @@ void test_decapsulate_buffer_too_small(void) {
  * Verifies that decapsulation rejects packets with wrong protocol ID.
  */
 void test_decapsulate_invalid_protocol(void) {
-    unsigned char test_data[32];
-    unsigned char output_data[64];
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence, flags;
-    int result;
+    unsigned char test_data[32] = {0};
+    unsigned char output_data[64] = {0};
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0, flags = 0;
+    int result = 0;
 
     serial_protocol_encapsulate(test_data, 32, 0, 0, &packet);
 
@@ -309,12 +309,12 @@ void test_decapsulate_invalid_protocol(void) {
  * Verifies that decapsulation detects checksum mismatches.
  */
 void test_decapsulate_corrupted_checksum(void) {
-    unsigned char test_data[32];
-    unsigned char output_data[64];
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence, flags;
-    int result;
+    unsigned char test_data[32] = {0};
+    unsigned char output_data[64] = {0};
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0, flags = 0;
+    int result = 0;
 
     serial_protocol_encapsulate(test_data, 32, 0, 0, &packet);
 
@@ -337,12 +337,12 @@ void test_decapsulate_corrupted_checksum(void) {
  * Verifies complete round-trip preserves data integrity.
  */
 void test_roundtrip_basic(void) {
-    unsigned char test_data[TEST_DATA_SIZE];
-    unsigned char output_data[TEST_DATA_SIZE];
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence, flags;
-    int i;
+    unsigned char test_data[TEST_DATA_SIZE] = {0};
+    unsigned char output_data[TEST_DATA_SIZE] = {0};
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0, flags = 0;
+    int i = 0;
 
     /* Fill with test pattern */
     for (i = 0; i < TEST_DATA_SIZE; i++) {
@@ -369,11 +369,11 @@ void test_roundtrip_basic(void) {
  * Verifies that status flags survive encapsulation/decapsulation.
  */
 void test_roundtrip_flags(void) {
-    unsigned char test_data[32];
-    unsigned char output_data[32];
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence, flags_in, flags_out;
+    unsigned char test_data[32] = {0};
+    unsigned char output_data[32] = {0};
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0, flags_in = 0, flags_out = 0;
 
     flags_in = SERIAL_FLAG_FRAMING_ERROR | SERIAL_FLAG_XOFF;
 
@@ -392,11 +392,11 @@ void test_roundtrip_flags(void) {
  * Verifies that sequence numbers survive round-trip.
  */
 void test_roundtrip_sequence(void) {
-    unsigned char test_data[32];
-    unsigned char output_data[32];
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence_in, sequence_out, flags;
+    unsigned char test_data[32] = {0};
+    unsigned char output_data[32] = {0};
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence_in = 0, sequence_out = 0, flags = 0;
 
     sequence_in = 54321;
 
@@ -416,12 +416,12 @@ void test_roundtrip_sequence(void) {
  * Verifies data integrity with pseudo-random data pattern.
  */
 void test_roundtrip_random_data(void) {
-    unsigned char test_data[128];
-    unsigned char output_data[128];
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence, flags;
-    int i;
+    unsigned char test_data[128] = {0};
+    unsigned char output_data[128] = {0};
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0, flags = 0;
+    int i = 0;
 
     /* Generate pseudo-random pattern */
     for (i = 0; i < 128; i++) {
@@ -444,9 +444,9 @@ void test_roundtrip_random_data(void) {
  * Verifies that checksum calculation produces a result.
  */
 void test_checksum_calculation(void) {
-    unsigned char test_data[32];
-    xoe_packet_t packet;
-    int i;
+    unsigned char test_data[32] = {0};
+    xoe_packet_t packet = {0};
+    int i = 0;
 
     for (i = 0; i < 32; i++) {
         test_data[i] = (unsigned char)(i % 256);
@@ -467,9 +467,9 @@ void test_checksum_calculation(void) {
  * Verifies that valid checksums are accepted.
  */
 void test_checksum_valid(void) {
-    unsigned char test_data[32];
-    xoe_packet_t packet;
-    int result;
+    unsigned char test_data[32] = {0};
+    xoe_packet_t packet = {0};
+    int result = 0;
 
     serial_protocol_encapsulate(test_data, 32, 0, 0, &packet);
 
@@ -485,9 +485,9 @@ void test_checksum_valid(void) {
  * Verifies that corrupted checksums are detected.
  */
 void test_checksum_invalid(void) {
-    unsigned char test_data[32];
-    xoe_packet_t packet;
-    int result;
+    unsigned char test_data[32] = {0};
+    xoe_packet_t packet = {0};
+    int result = 0;
 
     serial_protocol_encapsulate(test_data, 32, 0, 0, &packet);
 
@@ -508,10 +508,10 @@ void test_checksum_invalid(void) {
  * Verifies that same input produces same checksum.
  */
 void test_checksum_deterministic(void) {
-    unsigned char test_data[32];
-    xoe_packet_t packet1, packet2;
-    uint32_t checksum1, checksum2;
-    int i;
+    unsigned char test_data[32] = {0};
+    xoe_packet_t packet1 = {0}, packet2 = {0};
+    uint32_t checksum1 = 0, checksum2 = 0;
+    int i = 0;
 
     for (i = 0; i < 32; i++) {
         test_data[i] = (unsigned char)(i % 256);
@@ -536,8 +536,8 @@ void test_checksum_deterministic(void) {
  * Verifies that serial_protocol_free_payload() safely frees resources.
  */
 void test_free_payload(void) {
-    unsigned char test_data[32];
-    xoe_packet_t packet;
+    unsigned char test_data[32] = {0};
+    xoe_packet_t packet = {0};
 
     serial_protocol_encapsulate(test_data, 32, 0, 0, &packet);
     serial_protocol_free_payload(&packet);

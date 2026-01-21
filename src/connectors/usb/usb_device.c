@@ -51,7 +51,7 @@ static int map_libusb_error(int libusb_code)
  */
 int usb_device_init_library(struct libusb_context** ctx)
 {
-    int result;
+    int result = 0;
 
     if (ctx == NULL) {
         return E_INVALID_ARGUMENT;
@@ -87,11 +87,11 @@ void usb_device_cleanup_library(struct libusb_context* ctx)
  */
 int usb_device_enumerate(struct libusb_context* ctx)
 {
-    struct libusb_device** device_list;
-    struct libusb_device_descriptor desc;
-    ssize_t count;
-    ssize_t i;
-    int result;
+    struct libusb_device** device_list = NULL;
+    struct libusb_device_descriptor desc = {0};
+    ssize_t count = 0;
+    ssize_t i = 0;
+    int result = 0;
 
     if (ctx == NULL) {
         return E_INVALID_ARGUMENT;
@@ -131,11 +131,11 @@ int usb_device_find(struct libusb_context* ctx,
                     uint16_t pid,
                     struct libusb_device** device)
 {
-    struct libusb_device** device_list;
-    struct libusb_device_descriptor desc;
-    ssize_t count;
-    ssize_t i;
-    int result;
+    struct libusb_device** device_list = NULL;
+    struct libusb_device_descriptor desc = {0};
+    ssize_t count = 0;
+    ssize_t i = 0;
+    int result = 0;
     int found = 0;
 
     if (ctx == NULL || device == NULL) {
@@ -171,8 +171,8 @@ int usb_device_open(usb_device_t* dev,
                     struct libusb_context* ctx,
                     const usb_config_t* config)
 {
-    int result;
-    int kernel_active;
+    int result = 0;
+    int kernel_active = 0;
 
     if (dev == NULL || config == NULL) {
         return E_INVALID_ARGUMENT;
@@ -293,7 +293,7 @@ int usb_device_close(usb_device_t* dev)
  */
 int usb_device_claim_interface(usb_device_t* dev)
 {
-    int result;
+    int result = 0;
 
     if (dev == NULL || dev->handle == NULL) {
         return E_INVALID_ARGUMENT;
@@ -320,7 +320,7 @@ int usb_device_claim_interface(usb_device_t* dev)
  */
 int usb_device_release_interface(usb_device_t* dev)
 {
-    int result;
+    int result = 0;
 
     if (dev == NULL || dev->handle == NULL) {
         return E_INVALID_ARGUMENT;
@@ -348,11 +348,11 @@ int usb_device_get_endpoints(usb_device_t* dev,
                               uint8_t* endpoints,
                               int max_endpoints)
 {
-    const struct libusb_interface_descriptor* iface_desc;
-    const struct libusb_endpoint_descriptor* ep_desc;
-    struct libusb_config_descriptor* config_desc;
-    int result;
-    int i;
+    const struct libusb_interface_descriptor* iface_desc = NULL;
+    const struct libusb_endpoint_descriptor* ep_desc = NULL;
+    struct libusb_config_descriptor* config_desc = NULL;
+    int result = 0;
+    int i = 0;
     int count = 0;
 
     if (dev == NULL || dev->handle == NULL || endpoints == NULL) {

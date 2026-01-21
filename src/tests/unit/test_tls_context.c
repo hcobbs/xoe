@@ -19,7 +19,8 @@
  * when given valid certificate, key, and TLS 1.3 version.
  */
 void test_context_init_valid_tls13(void) {
-    SSL_CTX* ctx = tls_context_init("./certs/server.crt", "./certs/server.key", ENCRYPT_TLS13);
+    SSL_CTX* ctx = NULL;
+    ctx = tls_context_init("./certs/server.crt", "./certs/server.key", ENCRYPT_TLS13);
     TEST_ASSERT_NOT_NULL(ctx, "TLS 1.3 context should initialize successfully");
     if (ctx) {
         tls_context_cleanup(ctx);
@@ -33,7 +34,8 @@ void test_context_init_valid_tls13(void) {
  * when given valid certificate, key, and TLS 1.2 version.
  */
 void test_context_init_valid_tls12(void) {
-    SSL_CTX* ctx = tls_context_init("./certs/server.crt", "./certs/server.key", ENCRYPT_TLS12);
+    SSL_CTX* ctx = NULL;
+    ctx = tls_context_init("./certs/server.crt", "./certs/server.key", ENCRYPT_TLS12);
     TEST_ASSERT_NOT_NULL(ctx, "TLS 1.2 context should initialize successfully");
     if (ctx) {
         tls_context_cleanup(ctx);
@@ -46,7 +48,8 @@ void test_context_init_valid_tls12(void) {
  * Verifies that tls_context_init() returns NULL when certificate path is NULL.
  */
 void test_context_init_null_cert(void) {
-    SSL_CTX* ctx = tls_context_init(NULL, "./certs/server.key", ENCRYPT_TLS13);
+    SSL_CTX* ctx = NULL;
+    ctx = tls_context_init(NULL, "./certs/server.key", ENCRYPT_TLS13);
     TEST_ASSERT_NULL(ctx, "Context init should fail with NULL certificate");
 }
 
@@ -56,7 +59,8 @@ void test_context_init_null_cert(void) {
  * Verifies that tls_context_init() returns NULL when key path is NULL.
  */
 void test_context_init_null_key(void) {
-    SSL_CTX* ctx = tls_context_init("./certs/server.crt", NULL, ENCRYPT_TLS13);
+    SSL_CTX* ctx = NULL;
+    ctx = tls_context_init("./certs/server.crt", NULL, ENCRYPT_TLS13);
     TEST_ASSERT_NULL(ctx, "Context init should fail with NULL key");
 }
 
@@ -67,7 +71,8 @@ void test_context_init_null_key(void) {
  * TLS version parameter (not ENCRYPT_TLS12 or ENCRYPT_TLS13).
  */
 void test_context_init_invalid_version(void) {
-    SSL_CTX* ctx = tls_context_init("./certs/server.crt", "./certs/server.key", 99);
+    SSL_CTX* ctx = NULL;
+    ctx = tls_context_init("./certs/server.crt", "./certs/server.key", 99);
     TEST_ASSERT_NULL(ctx, "Context init should fail with invalid version");
 }
 
@@ -78,7 +83,8 @@ void test_context_init_invalid_version(void) {
  * does not exist.
  */
 void test_context_init_missing_cert(void) {
-    SSL_CTX* ctx = tls_context_init("/nonexistent/cert.crt", "./certs/server.key", ENCRYPT_TLS13);
+    SSL_CTX* ctx = NULL;
+    ctx = tls_context_init("/nonexistent/cert.crt", "./certs/server.key", ENCRYPT_TLS13);
     TEST_ASSERT_NULL(ctx, "Context init should fail with missing certificate");
 }
 
@@ -88,7 +94,8 @@ void test_context_init_missing_cert(void) {
  * Verifies that tls_context_init() returns NULL when key file does not exist.
  */
 void test_context_init_missing_key(void) {
-    SSL_CTX* ctx = tls_context_init("./certs/server.crt", "/nonexistent/key.key", ENCRYPT_TLS13);
+    SSL_CTX* ctx = NULL;
+    ctx = tls_context_init("./certs/server.crt", "/nonexistent/key.key", ENCRYPT_TLS13);
     TEST_ASSERT_NULL(ctx, "Context init should fail with missing key");
 }
 

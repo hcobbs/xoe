@@ -16,8 +16,8 @@
 #include "lib/common/definitions.h"
 
 int tls_read(SSL* ssl, void* buffer, int len) {
-    int ret;
-    int ssl_error;
+    int ret = 0;
+    int ssl_error = 0;
 
     /* Validate arguments */
     if (ssl == NULL || buffer == NULL) {
@@ -83,8 +83,8 @@ int tls_read(SSL* ssl, void* buffer, int len) {
 }
 
 int tls_write(SSL* ssl, const void* buffer, int len) {
-    int ret;
-    int ssl_error;
+    int ret = 0;
+    int ssl_error = 0;
 
     /* Validate arguments */
     if (ssl == NULL || buffer == NULL) {

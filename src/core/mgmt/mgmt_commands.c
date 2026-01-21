@@ -78,6 +78,7 @@ static void send_fmt(mgmt_session_t *session, const char *fmt, ...) {
 static int parse_command(char *line, int *argc, char **argv, int max_args) {
     int count = 0;
     char *p = line;
+    (void)max_args;
 
     while (*p && count < max_args) {
         while (*p && isspace((unsigned char)*p)) {
@@ -107,12 +108,12 @@ static int parse_command(char *line, int *argc, char **argv, int max_args) {
  * mgmt_command_loop - Main command processing loop
  */
 void mgmt_command_loop(mgmt_session_t *session) {
-    ssize_t bytes_read;
-    char *newline;
-    int argc;
-    char *argv[16];
-    int i;
-    int found;
+    ssize_t bytes_read = 0;
+    char *newline = NULL;
+    int argc = 0;
+    char *argv[16] = {0};
+    int i = 0;
+    int found = 0;
     const char *prompt = "xoe> ";
 
     while (1) {
@@ -160,7 +161,7 @@ void mgmt_command_loop(mgmt_session_t *session) {
 }
 
 static int cmd_help(mgmt_session_t *session, int argc, char **argv) {
-    int i;
+    int i = 0;
     (void)argc;
     (void)argv;
 
@@ -221,8 +222,8 @@ static int cmd_show(mgmt_session_t *session, int argc, char **argv) {
 }
 
 static int cmd_set(mgmt_session_t *session, int argc, char **argv) {
-    const char *param;
-    const char *value;
+    const char *param = NULL;
+    const char *value = NULL;
 
     if (argc < 3) {
         send_str(session, "Usage: set <parameter> <value>\n");
@@ -252,8 +253,8 @@ static int cmd_set(mgmt_session_t *session, int argc, char **argv) {
         send_fmt(session, "Pending: mode = %s\n", value);
 
     } else if (strcmp(param, "port") == 0) {
-        char *endptr;
-        long port;
+        char *endptr = NULL;
+        long port = 0;
         errno = 0;
         port = strtol(value, &endptr, 10);
         if (errno == ERANGE || *endptr != '\0' || port <= 0 || port > 65535) {
@@ -271,7 +272,7 @@ static int cmd_set(mgmt_session_t *session, int argc, char **argv) {
 }
 
 static int cmd_get(mgmt_session_t *session, int argc, char **argv) {
-    const char *param;
+    const char *param = NULL;
 
     if (argc < 2) {
         send_str(session, "Usage: get <parameter>\n");
@@ -343,8 +344,8 @@ static int cmd_clear(mgmt_session_t *session, int argc, char **argv) {
 }
 
 static int cmd_validate(mgmt_session_t *session, int argc, char **argv) {
-    char error_buf[256];
-    int result;
+    char error_buf[256] = {0};
+    int result = 0;
 
     (void)argc;
     (void)argv;
@@ -372,8 +373,8 @@ static int cmd_validate(mgmt_session_t *session, int argc, char **argv) {
 }
 
 static int cmd_restart(mgmt_session_t *session, int argc, char **argv) {
-    char error_buf[256];
-    int result;
+    char error_buf[256] = {0};
+    int result = 0;
 
     (void)argc;
     (void)argv;

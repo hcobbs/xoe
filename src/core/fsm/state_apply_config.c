@@ -22,8 +22,8 @@
  *   STATE_CLEANUP - If configuration validation fails (should not happen)
  */
 xoe_state_t state_apply_config(xoe_config_t *config) {
-    char error_buf[256];
-    int result;
+    char error_buf[256] = {0};
+    int result = 0;
 
     if (config == NULL) {
         fprintf(stderr, "Error: NULL config in state_apply_config\n");

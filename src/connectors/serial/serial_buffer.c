@@ -20,7 +20,7 @@
  */
 int serial_buffer_init(serial_buffer_t* buffer, uint32_t capacity)
 {
-    int result;
+    int result = 0;
 
     if (buffer == NULL) {
         return E_INVALID_ARGUMENT;
@@ -101,17 +101,14 @@ void serial_buffer_destroy(serial_buffer_t* buffer)
 int serial_buffer_write(serial_buffer_t* buffer, const void* data,
                         uint32_t len)
 {
-    const unsigned char* src;
-    uint32_t bytes_written;
-    uint32_t chunk_size;
-    uint32_t space_to_end;
+    const unsigned char* src = (const unsigned char*)data;
+    uint32_t bytes_written = 0;
+    uint32_t chunk_size = 0;
+    uint32_t space_to_end = 0;
 
     if (buffer == NULL || data == NULL || len == 0) {
         return E_INVALID_ARGUMENT;
     }
-
-    src = (const unsigned char*)data;
-    bytes_written = 0;
 
     pthread_mutex_lock(&buffer->mutex);
 
@@ -173,17 +170,14 @@ int serial_buffer_write(serial_buffer_t* buffer, const void* data,
  */
 int serial_buffer_read(serial_buffer_t* buffer, void* data, uint32_t max_len)
 {
-    unsigned char* dst;
-    uint32_t bytes_read;
-    uint32_t chunk_size;
-    uint32_t data_to_end;
+    unsigned char* dst = (unsigned char*)data;
+    uint32_t bytes_read = 0;
+    uint32_t chunk_size = 0;
+    uint32_t data_to_end = 0;
 
     if (buffer == NULL || data == NULL || max_len == 0) {
         return E_INVALID_ARGUMENT;
     }
-
-    dst = (unsigned char*)data;
-    bytes_read = 0;
 
     pthread_mutex_lock(&buffer->mutex);
 
@@ -234,7 +228,7 @@ int serial_buffer_read(serial_buffer_t* buffer, void* data, uint32_t max_len)
  */
 uint32_t serial_buffer_available(serial_buffer_t* buffer)
 {
-    uint32_t count;
+    uint32_t count = 0;
 
     if (buffer == NULL) {
         return 0;
@@ -252,7 +246,7 @@ uint32_t serial_buffer_available(serial_buffer_t* buffer)
  */
 uint32_t serial_buffer_free_space(serial_buffer_t* buffer)
 {
-    uint32_t free_space;
+    uint32_t free_space = 0;
 
     if (buffer == NULL) {
         return 0;
@@ -287,7 +281,7 @@ void serial_buffer_close(serial_buffer_t* buffer)
  */
 int serial_buffer_is_closed(serial_buffer_t* buffer)
 {
-    int closed;
+    int closed = FALSE;
 
     if (buffer == NULL) {
         return FALSE;

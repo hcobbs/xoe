@@ -81,7 +81,7 @@ int usb_transfer_control(usb_device_t* dev,
                          uint16_t wLength,
                          unsigned int timeout)
 {
-    int result;
+    int result = 0;
 
     /* Validate input parameters */
     if (dev == NULL || dev->handle == NULL) {
@@ -119,7 +119,7 @@ int usb_transfer_bulk_read(usb_device_t* dev,
                            int* transferred,
                            unsigned int timeout)
 {
-    int result;
+    int result = 0;
     int bytes_transferred = 0;
 
     /* Validate input parameters */
@@ -165,7 +165,7 @@ int usb_transfer_bulk_write(usb_device_t* dev,
                             int* transferred,
                             unsigned int timeout)
 {
-    int result;
+    int result = 0;
     int bytes_transferred = 0;
 
     /* Validate input parameters */
@@ -211,7 +211,7 @@ int usb_transfer_interrupt_read(usb_device_t* dev,
                                 int* transferred,
                                 unsigned int timeout)
 {
-    int result;
+    int result = 0;
     int bytes_transferred = 0;
 
     /* Validate input parameters */
@@ -285,7 +285,7 @@ static void async_transfer_callback(struct libusb_transfer* transfer)
  */
 usb_transfer_ctx_t* usb_transfer_alloc(void)
 {
-    usb_transfer_ctx_t* ctx;
+    usb_transfer_ctx_t* ctx = NULL;
 
     /* Allocate context structure */
     ctx = (usb_transfer_ctx_t*)malloc(sizeof(usb_transfer_ctx_t));
@@ -344,7 +344,7 @@ int usb_transfer_async_submit(usb_device_t* dev,
                                unsigned char* buffer,
                                int length)
 {
-    int result;
+    int result = 0;
 
     /* Validate parameters */
     if (dev == NULL || dev->handle == NULL || ctx == NULL ||
@@ -395,9 +395,9 @@ int usb_transfer_async_submit(usb_device_t* dev,
 int usb_transfer_async_wait(usb_transfer_ctx_t* ctx,
                              unsigned int timeout_ms)
 {
-    int result;
-    struct timespec ts;
-    struct timeval now;
+    int result = 0;
+    struct timespec ts = {0};
+    struct timeval now = {0};
 
     /* Validate parameters */
     if (ctx == NULL) {
@@ -450,7 +450,7 @@ int usb_transfer_async_wait(usb_transfer_ctx_t* ctx,
  */
 int usb_transfer_async_cancel(usb_transfer_ctx_t* ctx)
 {
-    int result;
+    int result = 0;
 
     /* Validate parameters */
     if (ctx == NULL || ctx->transfer == NULL) {

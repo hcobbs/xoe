@@ -16,8 +16,9 @@
  * Verifies that tls_read() returns error when given NULL SSL pointer.
  */
 void test_tls_read_null_session(void) {
-    char buffer[256];
-    int result = tls_read(NULL, buffer, sizeof(buffer));
+    char buffer[256] = {0};
+    int result = 0;
+    result = tls_read(NULL, buffer, sizeof(buffer));
     TEST_ASSERT(result < 0, "TLS read should fail with NULL session");
 }
 
@@ -49,7 +50,8 @@ void test_tls_read_null_buffer(void) {
  */
 void test_tls_write_null_session(void) {
     const char* data = "test";
-    int result = tls_write(NULL, data, 4);
+    int result = 0;
+    result = tls_write(NULL, data, 4);
     TEST_ASSERT(result < 0, "TLS write should fail with NULL session");
 }
 

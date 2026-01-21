@@ -16,8 +16,8 @@
 #include "lib/common/definitions.h"
 
 SSL* tls_session_create(SSL_CTX* ctx, int client_socket) {
-    SSL* ssl;
-    int ret;
+    SSL* ssl = NULL;
+    int ret = 0;
 
     /* Validate arguments */
     if (ctx == NULL) {
@@ -55,8 +55,8 @@ SSL* tls_session_create(SSL_CTX* ctx, int client_socket) {
 }
 
 int tls_session_handshake(SSL* ssl) {
-    int ret;
-    int ssl_error;
+    int ret = 0;
+    int ssl_error = 0;
 
     if (ssl == NULL) {
         fprintf(stderr, "SSL session is NULL\n");
@@ -99,8 +99,8 @@ int tls_session_handshake(SSL* ssl) {
 }
 
 int tls_session_shutdown(SSL* ssl) {
-    int ret;
-    int ssl_error;
+    int ret = 0;
+    int ssl_error = 0;
 
     if (ssl == NULL) {
         fprintf(stderr, "tls_session_shutdown: SSL session is NULL\n");
@@ -134,9 +134,9 @@ int tls_session_shutdown(SSL* ssl) {
 }
 
 SSL* tls_session_create_client(SSL_CTX* ctx, int server_socket) {
-    SSL* ssl;
-    int ret;
-    int ssl_error;
+    SSL* ssl = NULL;
+    int ret = 0;
+    int ssl_error = 0;
 
     /* Validate arguments */
     if (ctx == NULL) {
@@ -202,9 +202,9 @@ SSL* tls_session_create_client(SSL_CTX* ctx, int server_socket) {
 
 SSL* tls_session_create_client_verified(SSL_CTX* ctx, int server_socket,
                                         const char* hostname) {
-    SSL* ssl;
-    int ret;
-    int ssl_error;
+    SSL* ssl = NULL;
+    int ret = 0;
+    int ssl_error = 0;
 
     /* Validate arguments */
     if (ctx == NULL) {

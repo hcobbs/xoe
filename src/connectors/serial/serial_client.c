@@ -67,8 +67,8 @@ static void* net_to_serial_thread_func(void* arg);
 serial_client_t* serial_client_init(const serial_config_t* config,
                                      int network_fd)
 {
-    serial_client_t* client;
-    int result;
+    serial_client_t* client = NULL;
+    int result = 0;
 
     if (config == NULL || network_fd < 0) {
         return NULL;
@@ -128,7 +128,7 @@ serial_client_t* serial_client_init(const serial_config_t* config,
  */
 int serial_client_start(serial_client_t* client)
 {
-    int result;
+    int result = 0;
 
     if (client == NULL) {
         return E_INVALID_ARGUMENT;
@@ -211,7 +211,7 @@ void serial_client_cleanup(serial_client_t** client)
  */
 int serial_client_should_shutdown(serial_client_t* client)
 {
-    int should_shutdown;
+    int should_shutdown = FALSE;
 
     if (client == NULL) {
         return TRUE;
@@ -247,14 +247,12 @@ void serial_client_request_shutdown(serial_client_t* client)
  */
 static void* serial_to_net_thread_func(void* arg)
 {
-    serial_client_t* client;
+    serial_client_t* client = (serial_client_t*)arg;
     unsigned char buffer[SERIAL_READ_CHUNK_SIZE];
-    int bytes_read;
-    int bytes_sent;
-    xoe_packet_t packet;
-    int result;
-
-    client = (serial_client_t*)arg;
+    int bytes_read = 0;
+    int bytes_sent = 0;
+    xoe_packet_t packet = {0};
+    int result = 0;
     LOG_INFO_SIMPLE("Serial→Network thread started");
 
     while (!serial_client_should_shutdown(client)) {
@@ -280,7 +278,7 @@ static void* serial_to_net_thread_func(void* arg)
 
         /* Encapsulate into XOE packet (SER-004 fix: mutex-protected sequence) */
         {
-            uint16_t seq;
+            uint16_t seq = 0;
             pthread_mutex_lock(&client->seq_mutex);
             seq = client->tx_sequence;
             client->tx_sequence++;
@@ -324,18 +322,15 @@ static void* serial_to_net_thread_func(void* arg)
  */
 static void* net_to_serial_thread_func(void* arg)
 {
-    serial_client_t* client;
+    serial_client_t* client = (serial_client_t*)arg;
     unsigned char serial_buffer[SERIAL_MAX_PAYLOAD_SIZE];
-    int bytes_read;
-    int bytes_written;
-    xoe_packet_t packet;
-    uint32_t actual_len;
-    uint16_t sequence;
-    uint16_t flags;
-    int result;
-
-    client = (serial_client_t*)arg;
-    memset(&packet, 0, sizeof(packet));
+    int bytes_read = 0;
+    int bytes_written = 0;
+    xoe_packet_t packet = {0};
+    uint32_t actual_len = 0;
+    uint16_t sequence = 0;
+    uint16_t flags = 0;
+    int result = 0;
     LOG_INFO_SIMPLE("Network→Serial thread started");
 
     while (!serial_client_should_shutdown(client)) {

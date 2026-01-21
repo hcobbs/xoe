@@ -17,7 +17,8 @@
  * Verifies that tls_get_error_string() returns a valid string pointer.
  */
 void test_get_error_string(void) {
-    const char* error_str = tls_get_error_string();
+    const char* error_str = NULL;
+    error_str = tls_get_error_string();
     TEST_ASSERT_NOT_NULL(error_str, "Error string should not be NULL");
 }
 
@@ -27,7 +28,8 @@ void test_get_error_string(void) {
  * Verifies that tls_get_error_string() returns a non-empty string.
  */
 void test_error_string_not_empty(void) {
-    const char* error_str = tls_get_error_string();
+    const char* error_str = NULL;
+    error_str = tls_get_error_string();
     if (error_str != NULL) {
         TEST_ASSERT(strlen(error_str) >= 0, "Error string should be valid");
     } else {
@@ -43,7 +45,8 @@ void test_error_string_not_empty(void) {
  * so tls_get_last_error() should return 0 (no error).
  */
 void test_get_last_error(void) {
-    int error_code = tls_get_last_error();
+    int error_code = 0;
+    error_code = tls_get_last_error();
     /*
      * With no prior SSL operations in this process, the error queue should
      * be empty. tls_get_last_error() returns:

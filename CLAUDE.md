@@ -114,8 +114,8 @@ telnet localhost 12345
 
 **Pre-PR Checklist**:
 - [ ] Code builds successfully: `make`
-- [ ] Code follows ANSI-C (C89) standards with `-std=c89 -pedantic`
-- [ ] No compiler warnings with `-Wall -Wextra`
+- [ ] Code follows C99 standards with `-std=c99 -pedantic`
+- [ ] Zero warnings enforced with `-Werror`
 - [ ] All functions have complete documentation (purpose, parameters, return values, errors)
 - [ ] Code has complete test coverage
 - [ ] Helper functions are reusable and well-documented
@@ -125,9 +125,11 @@ telnet localhost 12345
 ## Architecture
 
 ### Language Standard
-- **ANSI-C (C89)** (`-std=c89 -pedantic`) with strict warnings (`-Wall -Wextra`)
+- **C99 standard** (`-std=c99 -pedantic`) with strict warnings (`-Wall -Wextra -Werror`)
 - Cross-platform support for Linux, macOS, and BSD (Unix/POSIX only)
-- Fixed-width integer types (`uint16_t`, `uint32_t`) defined via typedefs (C89 doesn't have `stdint.h`)
+- Fixed-width integer types (`uint16_t`, `uint32_t`, `uint64_t`) via `<stdint.h>` (C99 native support)
+- **C89-style variable declarations**: All variables declared at block start, initialized at declaration
+- Leverages C99 extensions (native `<stdint.h>`, `//` comments, etc.) while maintaining C89 structure
 
 ### Directory Structure
 ```
@@ -281,6 +283,7 @@ socat -d -d pty,raw,echo=0 pty,raw,echo=0
 - Opening braces on same line for functions and control structures
 - Consistent spacing around operators and after keywords
 - Clear, readable code structure preferred over compact formatting
+- **Initialize variables at declaration**; all variables must be initialized when declared (e.g., `int result = 0;` not `int result;`)
 
 **Punctuation**:
 - **NEVER use em dashes (—).** Use periods, commas, or restructure the sentence. This is non-negotiable.

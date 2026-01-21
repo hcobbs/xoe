@@ -42,7 +42,7 @@ static void make_error_buffer_key(void) {
  * @return Pointer to thread-local error buffer (never NULL)
  */
 static char* get_error_buffer(void) {
-    char* buffer;
+    char* buffer = NULL;
 
     /* Ensure key is initialized */
     pthread_once(&error_buffer_key_once, make_error_buffer_key);
@@ -67,7 +67,7 @@ static char* get_error_buffer(void) {
 }
 
 int tls_get_last_error(void) {
-    unsigned long err;
+    unsigned long err = 0;
 
     /* Get last OpenSSL error from error queue */
     err = ERR_peek_last_error();
@@ -81,8 +81,8 @@ int tls_get_last_error(void) {
 }
 
 const char* tls_get_error_string(void) {
-    char* error_buffer;
-    unsigned long err;
+    char* error_buffer = NULL;
+    unsigned long err = 0;
 
     error_buffer = get_error_buffer();
 
@@ -101,8 +101,8 @@ const char* tls_get_error_string(void) {
 }
 
 int tls_map_error(void* ssl_void, int ssl_ret_code) {
-    SSL* ssl;
-    int ssl_error;
+    SSL* ssl = NULL;
+    int ssl_error = 0;
 
     if (ssl_void == NULL) {
         return E_INVALID_ARGUMENT;
@@ -140,8 +140,8 @@ int tls_map_error(void* ssl_void, int ssl_ret_code) {
 }
 
 void tls_print_errors(const char* prefix) {
-    unsigned long err;
-    char error_string[256];
+    unsigned long err = 0;
+    char error_string[256] = {0};
 
     if (prefix != NULL) {
         fprintf(stderr, "%s:\n", prefix);

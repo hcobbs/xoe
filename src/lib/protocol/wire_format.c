@@ -95,8 +95,8 @@ uint32_t xoe_wire_checksum(const void* data, uint32_t len)
 static uint32_t calculate_packet_checksum(const xoe_wire_header_t* header,
                                           const void* payload_data)
 {
-    uint32_t crc;
-    uint8_t header_bytes[8];  /* First 8 bytes of header (excluding checksum) */
+    uint32_t crc = 0;
+    uint8_t header_bytes[8] = {0};  /* First 8 bytes of header (excluding checksum) */
 
     /* Serialize header fields for checksum calculation */
     xoe_wire_write_uint16(header_bytes + 0, header->protocol_id);
@@ -122,7 +122,7 @@ static uint32_t calculate_packet_checksum(const xoe_wire_header_t* header,
 static int recv_exact(int fd, void* buffer, size_t len)
 {
     size_t total = 0;
-    ssize_t received;
+    ssize_t received = 0;
     uint8_t* buf = (uint8_t*)buffer;
 
     while (total < len) {
@@ -138,7 +138,7 @@ static int recv_exact(int fd, void* buffer, size_t len)
 static int send_exact(int fd, const void* buffer, size_t len)
 {
     size_t total = 0;
-    ssize_t sent;
+    ssize_t sent = 0;
     const uint8_t* buf = (const uint8_t*)buffer;
 
     while (total < len) {
@@ -155,7 +155,7 @@ static int send_exact(int fd, const void* buffer, size_t len)
 static int tls_recv_exact(SSL* ssl, void* buffer, size_t len)
 {
     size_t total = 0;
-    int received;
+    int received = 0;
     uint8_t* buf = (uint8_t*)buffer;
 
     while (total < len) {
@@ -171,7 +171,7 @@ static int tls_recv_exact(SSL* ssl, void* buffer, size_t len)
 static int tls_send_exact(SSL* ssl, const void* buffer, size_t len)
 {
     size_t total = 0;
-    int sent;
+    int sent = 0;
     const uint8_t* buf = (const uint8_t*)buffer;
 
     while (total < len) {
@@ -191,9 +191,9 @@ static int tls_send_exact(SSL* ssl, const void* buffer, size_t len)
 
 int xoe_wire_send(int fd, const xoe_packet_t* packet)
 {
-    xoe_wire_header_t header;
-    uint8_t header_buffer[XOE_WIRE_HEADER_SIZE];
-    int result;
+    xoe_wire_header_t header = {0};
+    uint8_t header_buffer[XOE_WIRE_HEADER_SIZE] = {0};
+    int result = 0;
 
     if (packet == NULL) {
         return E_INVALID_ARGUMENT;
@@ -235,10 +235,10 @@ int xoe_wire_send(int fd, const xoe_packet_t* packet)
 
 int xoe_wire_recv(int fd, xoe_packet_t* packet)
 {
-    xoe_wire_header_t header;
-    uint8_t header_buffer[XOE_WIRE_HEADER_SIZE];
-    uint32_t calculated_checksum;
-    int result;
+    xoe_wire_header_t header = {0};
+    uint8_t header_buffer[XOE_WIRE_HEADER_SIZE] = {0};
+    uint32_t calculated_checksum = 0;
+    int result = 0;
 
     if (packet == NULL) {
         return E_INVALID_ARGUMENT;
@@ -306,9 +306,9 @@ int xoe_wire_recv(int fd, xoe_packet_t* packet)
 int xoe_wire_send_tls(void* ssl_ptr, const xoe_packet_t* packet)
 {
     SSL* ssl = (SSL*)ssl_ptr;
-    xoe_wire_header_t header;
-    uint8_t header_buffer[XOE_WIRE_HEADER_SIZE];
-    int result;
+    xoe_wire_header_t header = {0};
+    uint8_t header_buffer[XOE_WIRE_HEADER_SIZE] = {0};
+    int result = 0;
 
     if (packet == NULL || ssl == NULL) {
         return E_INVALID_ARGUMENT;
@@ -349,10 +349,10 @@ int xoe_wire_send_tls(void* ssl_ptr, const xoe_packet_t* packet)
 int xoe_wire_recv_tls(void* ssl_ptr, xoe_packet_t* packet)
 {
     SSL* ssl = (SSL*)ssl_ptr;
-    xoe_wire_header_t header;
-    uint8_t header_buffer[XOE_WIRE_HEADER_SIZE];
-    uint32_t calculated_checksum;
-    int result;
+    xoe_wire_header_t header = {0};
+    uint8_t header_buffer[XOE_WIRE_HEADER_SIZE] = {0};
+    uint32_t calculated_checksum = 0;
+    int result = 0;
 
     if (packet == NULL || ssl == NULL) {
         return E_INVALID_ARGUMENT;

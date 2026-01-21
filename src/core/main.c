@@ -32,7 +32,7 @@
  * MODE_SELECT → (mode) → MODE_STOP → APPLY_CONFIG → MODE_SELECT (loop)
  */
 int main(int argc, char *argv[]) {
-    xoe_config_t config;
+    xoe_config_t config = {0};
     xoe_state_t state = STATE_INIT;
 
     while (state != STATE_EXIT) {
@@ -71,6 +71,10 @@ int main(int argc, char *argv[]) {
 
             case STATE_CLIENT_USB:
                 state = state_client_usb(&config);
+                break;
+
+            case STATE_SERVER_NBD:
+                state = state_server_nbd(&config);
                 break;
 
             case STATE_MODE_STOP:

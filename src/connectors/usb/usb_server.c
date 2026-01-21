@@ -30,8 +30,8 @@
  */
 usb_server_t* usb_server_init(void)
 {
-    usb_server_t* server;
-    int i;
+    usb_server_t* server = NULL;
+    int i = 0;
 
     /* Allocate server structure */
     server = (usb_server_t*)malloc(sizeof(usb_server_t));
@@ -63,7 +63,7 @@ usb_server_t* usb_server_init(void)
  */
 void usb_server_cleanup(usb_server_t* server)
 {
-    int i;
+    int i = 0;
 
     if (server == NULL) {
         return;
@@ -90,7 +90,7 @@ int usb_server_register_client(usb_server_t* server,
                                 int socket_fd,
                                 uint32_t device_id)
 {
-    int i;
+    int i = 0;
     int result = E_OUT_OF_MEMORY;
 
     if (server == NULL) {
@@ -130,7 +130,7 @@ int usb_server_register_client(usb_server_t* server,
 int usb_server_unregister_client(usb_server_t* server,
                                   int socket_fd)
 {
-    int i;
+    int i = 0;
     int result = E_NOT_FOUND;
 
     if (server == NULL) {
@@ -175,12 +175,12 @@ int usb_server_route_urb(usb_server_t* server,
                          uint32_t data_len,
                          int sender_fd)
 {
-    xoe_packet_t packet;
+    xoe_packet_t packet = {0};
     int target_fd = -1;
     int target_index = -1;
-    int i;
-    int result;
-    ssize_t sent;
+    int i = 0;
+    int result = 0;
+    ssize_t sent = 0;
 
     /* Validate parameters */
     if (server == NULL || urb_header == NULL) {
@@ -254,10 +254,10 @@ static int usb_server_handle_register(usb_server_t* server,
                                        const usb_urb_header_t* urb_header,
                                        int sender_fd)
 {
-    xoe_packet_t response;
-    usb_urb_header_t response_urb;
-    int result;
-    ssize_t sent;
+    xoe_packet_t response = {0};
+    usb_urb_header_t response_urb = {0};
+    int result = 0;
+    ssize_t sent = 0;
 
     /* Register client with device_id from URB header */
     result = usb_server_register_client(server, sender_fd,
@@ -300,10 +300,10 @@ static int usb_server_handle_unregister(usb_server_t* server,
                                          const usb_urb_header_t* urb_header,
                                          int sender_fd)
 {
-    xoe_packet_t response;
-    usb_urb_header_t response_urb;
-    int result;
-    ssize_t sent;
+    xoe_packet_t response = {0};
+    usb_urb_header_t response_urb = {0};
+    int result = 0;
+    ssize_t sent = 0;
 
     /* Unregister client */
     result = usb_server_unregister_client(server, sender_fd);
@@ -345,10 +345,10 @@ int usb_server_handle_urb(usb_server_t* server,
                           const xoe_packet_t* packet,
                           int sender_fd)
 {
-    usb_urb_header_t urb_header;
+    usb_urb_header_t urb_header = {0};
     unsigned char data_buffer[USB_MAX_TRANSFER_SIZE];
-    uint32_t data_len;
-    int result;
+    uint32_t data_len = 0;
+    int result = 0;
 
     /* Validate parameters */
     if (server == NULL || packet == NULL) {
@@ -399,7 +399,7 @@ int usb_server_handle_urb(usb_server_t* server,
  */
 void usb_server_print_stats(const usb_server_t* server)
 {
-    int i;
+    int i = 0;
 
     if (server == NULL) {
         return;

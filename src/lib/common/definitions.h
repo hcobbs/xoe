@@ -5,8 +5,13 @@
 #define TRUE  1
 #define FALSE 0
 
+/* Success Code */
+#define SUCCESS 0
+
 /* Error Definitions */
 #define E_UNKNOWN_ERROR        -1
+#define E_NULL_POINTER         -26  /* NULL pointer argument */
+#define E_INIT_FAILED          -27  /* Initialization failed */
 #define E_INVALID_ARGUMENT     -2
 #define E_OUT_OF_MEMORY        -3
 #define E_FILE_NOT_FOUND       -4
@@ -35,6 +40,15 @@
 #define E_NOT_SUPPORTED        -23  /* Operation not supported */
 #define E_USB_TRANSFER_ERROR   -24  /* Generic USB transfer error */
 #define E_DNS_ERROR            -25  /* DNS resolution failed */
+
+/* NBD-specific Error Definitions (start at -200) */
+#define E_NBD_HANDSHAKE_FAILED  -200  /* NBD handshake negotiation failed */
+#define E_NBD_INVALID_MAGIC     -201  /* Invalid protocol magic number */
+#define E_NBD_BACKEND_ERROR     -202  /* Backend I/O error */
+#define E_NBD_EXPORT_NOT_FOUND  -203  /* Export path doesn't exist */
+#define E_NBD_READ_ONLY         -204  /* Write attempted on read-only export */
+#define E_NBD_OFFSET_ERROR      -205  /* Offset beyond export size */
+#define E_NBD_LENGTH_ERROR      -206  /* Request length too large */
 
 /* USB-specific Error Definitions (start at -100) */
 #define E_USB_NOT_FOUND        -100  /* USB device not found */

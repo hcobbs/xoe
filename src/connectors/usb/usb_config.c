@@ -112,7 +112,7 @@ int usb_config_validate(const usb_config_t* config)
  */
 usb_multi_config_t* usb_multi_config_init(int max_devices)
 {
-    usb_multi_config_t* multi_config;
+    usb_multi_config_t* multi_config = NULL;
 
     /* Validate max_devices */
     if (max_devices <= 0 || max_devices > USB_MAX_DEVICES) {
@@ -140,7 +140,7 @@ usb_multi_config_t* usb_multi_config_init(int max_devices)
 
     /* Initialize all device configs to defaults */
     {
-        int i;
+        int i = 0;
         for (i = 0; i < max_devices; i++) {
             usb_config_init_defaults(&multi_config->devices[i]);
         }
@@ -168,7 +168,8 @@ int usb_multi_config_add_device(usb_multi_config_t* multi_config,
 
     /* Validate device configuration */
     {
-        int result = usb_config_validate(device_config);
+        int result = 0;
+        result = usb_config_validate(device_config);
         if (result != 0) {
             return result;
         }

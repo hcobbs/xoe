@@ -51,8 +51,8 @@ static int load_certificates(SSL_CTX* ctx, const char* cert_file, const char* ke
 }
 
 SSL_CTX* tls_context_init(const char* cert_file, const char* key_file, int tls_version) {
-    SSL_CTX* ctx;
-    int ret;
+    SSL_CTX* ctx = NULL;
+    int ret = 0;
 
     /* Validate arguments */
     if (cert_file == NULL || key_file == NULL) {
@@ -94,8 +94,8 @@ SSL_CTX* tls_context_init(const char* cert_file, const char* key_file, int tls_v
 }
 
 int tls_context_configure(SSL_CTX* ctx, int tls_version) {
-    int min_version;
-    int max_version;
+    int min_version = 0;
+    int max_version = 0;
 
     if (ctx == NULL) {
         fprintf(stderr, "SSL context is NULL\n");
@@ -149,8 +149,8 @@ int tls_context_configure(SSL_CTX* ctx, int tls_version) {
 }
 
 SSL_CTX* tls_context_init_client(int tls_version) {
-    SSL_CTX* ctx;
-    int ret;
+    SSL_CTX* ctx = NULL;
+    int ret = 0;
 
     /* Validate arguments */
     if (tls_version != ENCRYPT_TLS12 && tls_version != ENCRYPT_TLS13) {
@@ -184,9 +184,9 @@ SSL_CTX* tls_context_init_client(int tls_version) {
 
 SSL_CTX* tls_context_init_client_verified(int tls_version, const char* ca_file,
                                           int verify_mode) {
-    SSL_CTX* ctx;
-    int ret;
-    int ssl_verify_mode;
+    SSL_CTX* ctx = NULL;
+    int ret = 0;
+    int ssl_verify_mode = 0;
 
     /* Validate arguments */
     if (tls_version != ENCRYPT_TLS12 && tls_version != ENCRYPT_TLS13) {

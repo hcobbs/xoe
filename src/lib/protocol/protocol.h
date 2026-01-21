@@ -7,6 +7,7 @@
 #define XOE_PROTOCOL_RAW    0x0000  /* Raw/echo protocol (future) */
 #define XOE_PROTOCOL_SERIAL 0x0001  /* Serial port protocol */
 #define XOE_PROTOCOL_USB    0x0002  /* USB device protocol */
+#define XOE_PROTOCOL_NBD    0x0003  /* NBD block device protocol */
 
 
 

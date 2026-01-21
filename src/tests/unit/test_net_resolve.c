@@ -27,10 +27,10 @@
  * Verifies that a dotted-decimal IP address resolves correctly.
  */
 void test_sockaddr_numeric_ipv4(void) {
-    struct sockaddr_in addr;
-    net_resolve_result_t result;
-    int ret;
-    char ip_str[INET_ADDRSTRLEN];
+    struct sockaddr_in addr = {0};
+    net_resolve_result_t result = {0};
+    int ret = 0;
+    char ip_str[INET_ADDRSTRLEN] = {0};
 
     ret = net_resolve_to_sockaddr("127.0.0.1", 8080, &addr, &result);
 
@@ -49,10 +49,10 @@ void test_sockaddr_numeric_ipv4(void) {
  * Verifies resolution of a different IP address.
  */
 void test_sockaddr_numeric_ipv4_other(void) {
-    struct sockaddr_in addr;
-    net_resolve_result_t result;
-    int ret;
-    char ip_str[INET_ADDRSTRLEN];
+    struct sockaddr_in addr = {0};
+    net_resolve_result_t result = {0};
+    int ret = 0;
+    char ip_str[INET_ADDRSTRLEN] = {0};
 
     ret = net_resolve_to_sockaddr("192.168.1.1", 12345, &addr, &result);
 
@@ -69,9 +69,9 @@ void test_sockaddr_numeric_ipv4_other(void) {
  * Verifies that "localhost" resolves to a valid address.
  */
 void test_sockaddr_localhost(void) {
-    struct sockaddr_in addr;
-    net_resolve_result_t result;
-    int ret;
+    struct sockaddr_in addr = {0};
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_to_sockaddr("localhost", 8080, &addr, &result);
 
@@ -88,9 +88,9 @@ void test_sockaddr_localhost(void) {
  * Verifies that NULL host returns E_INVALID_ARGUMENT.
  */
 void test_sockaddr_null_host(void) {
-    struct sockaddr_in addr;
-    net_resolve_result_t result;
-    int ret;
+    struct sockaddr_in addr = {0};
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_to_sockaddr(NULL, 8080, &addr, &result);
 
@@ -105,8 +105,8 @@ void test_sockaddr_null_host(void) {
  * Verifies that NULL addr returns E_INVALID_ARGUMENT.
  */
 void test_sockaddr_null_addr(void) {
-    net_resolve_result_t result;
-    int ret;
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_to_sockaddr("localhost", 8080, NULL, &result);
 
@@ -121,8 +121,8 @@ void test_sockaddr_null_addr(void) {
  * Verifies that NULL result parameter is handled gracefully.
  */
 void test_sockaddr_null_result(void) {
-    struct sockaddr_in addr;
-    int ret;
+    struct sockaddr_in addr = {0};
+    int ret = 0;
 
     ret = net_resolve_to_sockaddr("127.0.0.1", 8080, &addr, NULL);
 
@@ -135,9 +135,9 @@ void test_sockaddr_null_result(void) {
  * Verifies that negative port returns E_INVALID_ARGUMENT.
  */
 void test_sockaddr_negative_port(void) {
-    struct sockaddr_in addr;
-    net_resolve_result_t result;
-    int ret;
+    struct sockaddr_in addr = {0};
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_to_sockaddr("localhost", -1, &addr, &result);
 
@@ -150,9 +150,9 @@ void test_sockaddr_negative_port(void) {
  * Verifies that port > 65535 returns E_INVALID_ARGUMENT.
  */
 void test_sockaddr_port_too_large(void) {
-    struct sockaddr_in addr;
-    net_resolve_result_t result;
-    int ret;
+    struct sockaddr_in addr = {0};
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_to_sockaddr("localhost", 70000, &addr, &result);
 
@@ -165,9 +165,9 @@ void test_sockaddr_port_too_large(void) {
  * Verifies that port 0 is allowed (used for bind with OS-assigned port).
  */
 void test_sockaddr_port_zero(void) {
-    struct sockaddr_in addr;
-    net_resolve_result_t result;
-    int ret;
+    struct sockaddr_in addr = {0};
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_to_sockaddr("localhost", 0, &addr, &result);
 
@@ -181,9 +181,9 @@ void test_sockaddr_port_zero(void) {
  * Verifies that an invalid hostname returns E_DNS_ERROR.
  */
 void test_sockaddr_invalid_hostname(void) {
-    struct sockaddr_in addr;
-    net_resolve_result_t result;
-    int ret;
+    struct sockaddr_in addr = {0};
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_to_sockaddr("this.domain.definitely.does.not.exist.invalid",
                                    8080, &addr, &result);
@@ -205,8 +205,8 @@ void test_sockaddr_invalid_hostname(void) {
  */
 void test_connect_null_host(void) {
     int sock = -1;
-    net_resolve_result_t result;
-    int ret;
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_connect(NULL, 8080, &sock, &result);
 
@@ -220,8 +220,8 @@ void test_connect_null_host(void) {
  * Verifies that NULL sock_out returns E_INVALID_ARGUMENT.
  */
 void test_connect_null_sock(void) {
-    net_resolve_result_t result;
-    int ret;
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_connect("localhost", 8080, NULL, &result);
 
@@ -235,8 +235,8 @@ void test_connect_null_sock(void) {
  */
 void test_connect_port_zero(void) {
     int sock = -1;
-    net_resolve_result_t result;
-    int ret;
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_connect("localhost", 0, &sock, &result);
 
@@ -250,8 +250,8 @@ void test_connect_port_zero(void) {
  */
 void test_connect_port_too_large(void) {
     int sock = -1;
-    net_resolve_result_t result;
-    int ret;
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_connect("localhost", 70000, &sock, &result);
 
@@ -265,8 +265,8 @@ void test_connect_port_too_large(void) {
  */
 void test_connect_invalid_hostname(void) {
     int sock = -1;
-    net_resolve_result_t result;
-    int ret;
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     ret = net_resolve_connect("this.domain.definitely.does.not.exist.invalid",
                                8080, &sock, &result);
@@ -282,8 +282,8 @@ void test_connect_invalid_hostname(void) {
  */
 void test_connect_refused(void) {
     int sock = -1;
-    net_resolve_result_t result;
-    int ret;
+    net_resolve_result_t result = {0};
+    int ret = 0;
 
     /* Port 1 is almost never in use and should refuse connections */
     ret = net_resolve_connect("127.0.0.1", 1, &sock, &result);
@@ -318,7 +318,7 @@ void test_format_error_success(void) {
  */
 void test_format_error_invalid_arg(void) {
     net_resolve_result_t result = {E_INVALID_ARGUMENT, 0, 0};
-    char buf[256];
+    char buf[256] = {0};
 
     net_resolve_format_error(&result, buf, sizeof(buf));
 
@@ -333,7 +333,7 @@ void test_format_error_invalid_arg(void) {
  */
 void test_format_error_dns(void) {
     net_resolve_result_t result = {E_DNS_ERROR, EAI_NONAME, 0};
-    char buf[256];
+    char buf[256] = {0};
 
     net_resolve_format_error(&result, buf, sizeof(buf));
 
@@ -374,7 +374,7 @@ void test_format_error_null_buffer(void) {
  */
 void test_format_error_zero_buflen(void) {
     net_resolve_result_t result = {0, 0, 0};
-    char buf[256] = "unchanged";
+    char buf[256] = {'u', 'n', 'c', 'h', 'a', 'n', 'g', 'e', 'd', 0};
 
     net_resolve_format_error(&result, buf, 0);
 

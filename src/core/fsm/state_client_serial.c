@@ -63,11 +63,11 @@ static void signal_handler(int signum) {
  */
 xoe_state_t state_client_serial(xoe_config_t *config) {
     int sock = -1;
-    serial_client_t* serial_client;
+    serial_client_t* serial_client = NULL;
     serial_config_t *serial_cfg = (serial_config_t*)config->serial_config;
-    int result;
-    net_resolve_result_t resolve_result;
-    char error_buf[256];
+    int result = 0;
+    net_resolve_result_t resolve_result = {0};
+    char error_buf[256] = {0};
 
     /* Resolve hostname/IP and connect to server */
     if (net_resolve_connect(config->connect_server_ip,
@@ -106,8 +106,8 @@ xoe_state_t state_client_serial(xoe_config_t *config) {
 
     /* Install signal handlers for graceful shutdown (NET-009 fix: use sigaction) */
     {
-        struct sigaction sa;
-        memset(&sa, 0, sizeof(sa));
+        struct sigaction sa = {0};
+        (void)memset(&sa, 0, sizeof(sa));
         sa.sa_handler = signal_handler;
         sigemptyset(&sa.sa_mask);
         sa.sa_flags = 0;

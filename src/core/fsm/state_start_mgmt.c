@@ -21,7 +21,7 @@
  *                       (even if mgmt server fails - graceful degradation)
  */
 xoe_state_t state_start_mgmt(xoe_config_t *config) {
-    mgmt_server_t *server;
+    mgmt_server_t *server = NULL;
 
     /* Initialize global config manager (if not already initialized) */
     if (g_config_manager == NULL) {

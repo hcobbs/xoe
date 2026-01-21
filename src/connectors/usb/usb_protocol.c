@@ -66,7 +66,7 @@ static int32_t read_int32_be(const uint8_t* buffer)
  */
 static void serialize_urb_header(uint8_t* buffer, const usb_urb_header_t* header)
 {
-    int i;
+    int i = 0;
 
     write_uint16_be(buffer + 0, header->command);
     write_uint16_be(buffer + 2, header->flags);
@@ -90,7 +90,7 @@ static void serialize_urb_header(uint8_t* buffer, const usb_urb_header_t* header
  */
 static void deserialize_urb_header(usb_urb_header_t* header, const uint8_t* buffer)
 {
-    int i;
+    int i = 0;
 
     header->command = read_uint16_be(buffer + 0);
     header->flags = read_uint16_be(buffer + 2);
@@ -124,8 +124,8 @@ uint32_t usb_protocol_checksum(
     const void* data,
     uint32_t data_len)
 {
-    uint8_t header_buffer[36];  /* Serialized URB header size */
-    uint32_t checksum;
+    uint8_t header_buffer[36] = {0};  /* Serialized URB header size */
+    uint32_t checksum = 0;
 
     /* Validate input */
     if (urb_header == NULL) {
@@ -162,9 +162,9 @@ int usb_protocol_encapsulate(
     uint32_t data_len,
     xoe_packet_t* packet)
 {
-    uint8_t* payload_buffer;
-    uint32_t total_size;
-    xoe_payload_t* payload;
+    uint8_t* payload_buffer = NULL;
+    uint32_t total_size = 0;
+    xoe_payload_t* payload = NULL;
 
     /* Validate inputs */
     if (urb_header == NULL || packet == NULL) {
@@ -233,9 +233,9 @@ int usb_protocol_decapsulate(
     void* transfer_data,
     uint32_t* data_len)
 {
-    const uint8_t* payload_buffer;
-    uint32_t calculated_checksum;
-    uint32_t payload_data_len;
+    const uint8_t* payload_buffer = NULL;
+    uint32_t calculated_checksum = 0;
+    uint32_t payload_data_len = 0;
 
     /* Validate inputs */
     if (packet == NULL || urb_header == NULL || data_len == NULL) {

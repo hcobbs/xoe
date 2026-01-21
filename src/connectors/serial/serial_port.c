@@ -56,8 +56,8 @@ int serial_config_init_defaults(serial_config_t* config)
  */
 static int validate_device_path(const char* path)
 {
-    const char* p;
-    size_t len;
+    const char* p = NULL;
+    size_t len = 0;
 
     if (path == NULL || path[0] == '\0') {
         return E_INVALID_ARGUMENT;
@@ -103,7 +103,7 @@ static int validate_device_path(const char* path)
  */
 int serial_config_validate(const serial_config_t* config)
 {
-    int result;
+    int result = 0;
 
     if (config == NULL) {
         return E_INVALID_ARGUMENT;
@@ -154,8 +154,8 @@ int serial_config_validate(const serial_config_t* config)
  */
 int serial_port_open(const serial_config_t* config, int* fd)
 {
-    int result;
-    int file_descriptor;
+    int result = 0;
+    int file_descriptor = 0;
 
     if (config == NULL || fd == NULL) {
         return E_INVALID_ARGUMENT;
@@ -218,8 +218,8 @@ int serial_port_close(int fd)
  */
 int serial_port_read(int fd, void* buffer, int len, int timeout_ms)
 {
-    int bytes_read;
-    int result;
+    int bytes_read = 0;
+    int result = 0;
 
     if (fd < 0 || buffer == NULL || len <= 0) {
         return E_INVALID_ARGUMENT;
@@ -250,7 +250,7 @@ int serial_port_read(int fd, void* buffer, int len, int timeout_ms)
  */
 int serial_port_write(int fd, const void* buffer, int len)
 {
-    int bytes_written;
+    int bytes_written = 0;
     int total_written = 0;
     const char* data = (const char*)buffer;
 
@@ -278,7 +278,7 @@ int serial_port_write(int fd, const void* buffer, int len)
  */
 int serial_port_get_status(int fd, uint16_t* flags)
 {
-    int status;
+    int status = 0;
 
     if (fd < 0 || flags == NULL) {
         return E_INVALID_ARGUMENT;
@@ -329,11 +329,9 @@ int serial_port_flush(int fd, int input_flush, int output_flush)
  */
 static int configure_termios(int fd, const serial_config_t* config)
 {
-    struct termios tty;
-    speed_t speed;
-    int result;
-
-    memset(&tty, 0, sizeof(tty));
+    struct termios tty = {0};
+    speed_t speed = 0;
+    int result = 0;
 
     /* Get current termios settings */
     if (tcgetattr(fd, &tty) != 0) {
@@ -464,7 +462,7 @@ static int baud_to_speed_const(int baud_rate, speed_t* speed)
  */
 static int set_timeout(int fd, int timeout_ms)
 {
-    struct termios tty;
+    struct termios tty = {0};
 
     if (tcgetattr(fd, &tty) != 0) {
         return E_UNKNOWN_ERROR;

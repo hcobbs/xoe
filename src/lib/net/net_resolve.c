@@ -50,10 +50,10 @@ static void set_result(net_resolve_result_t *result, int error_code,
 int net_resolve_to_sockaddr(const char *host, int port,
                             struct sockaddr_in *addr,
                             net_resolve_result_t *result) {
-    struct addrinfo hints;
+    struct addrinfo hints = {0};
     struct addrinfo *res = NULL;
-    struct sockaddr_in *resolved;
-    int gai_ret;
+    struct sockaddr_in *resolved = NULL;
+    int gai_ret = 0;
 
     init_result(result);
 
@@ -105,13 +105,13 @@ int net_resolve_to_sockaddr(const char *host, int port,
 
 int net_resolve_connect(const char *host, int port, int *sock_out,
                         net_resolve_result_t *result) {
-    struct addrinfo hints;
+    struct addrinfo hints = {0};
     struct addrinfo *res = NULL;
     struct addrinfo *rp = NULL;
-    int gai_ret;
+    int gai_ret = 0;
     int sock = -1;
     int last_errno = 0;
-    struct sockaddr_in numeric_addr;
+    struct sockaddr_in numeric_addr = {0};
 
     init_result(result);
 

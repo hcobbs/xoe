@@ -23,10 +23,10 @@ int serial_protocol_encapsulate(const void* data, uint32_t len,
                                  uint16_t sequence, uint16_t flags,
                                  xoe_packet_t* packet)
 {
-    xoe_payload_t* payload;
-    serial_header_t* header;
-    unsigned char* payload_data;
-    uint32_t total_payload_size;
+    xoe_payload_t* payload = NULL;
+    serial_header_t* header = NULL;
+    unsigned char* payload_data = NULL;
+    uint32_t total_payload_size = 0;
 
     /* Validate parameters */
     if (data == NULL || packet == NULL) {
@@ -85,10 +85,10 @@ int serial_protocol_decapsulate(const xoe_packet_t* packet,
                                  uint32_t* actual_len,
                                  uint16_t* sequence, uint16_t* flags)
 {
-    const serial_header_t* header;
-    const unsigned char* payload_data;
-    uint32_t data_len;
-    int result;
+    const serial_header_t* header = NULL;
+    const unsigned char* payload_data = NULL;
+    uint32_t data_len = 0;
+    int result = 0;
 
     /* Validate parameters */
     if (packet == NULL || data == NULL || actual_len == NULL ||
@@ -147,8 +147,7 @@ int serial_protocol_decapsulate(const xoe_packet_t* packet,
 uint32_t serial_protocol_checksum(const xoe_packet_t* packet)
 {
     uint32_t checksum = 0;
-
-    uint8_t header_bytes[4];
+    uint8_t header_bytes[4] = {0};
 
     if (packet == NULL || packet->payload == NULL ||
         packet->payload->data == NULL) {
@@ -174,7 +173,7 @@ uint32_t serial_protocol_checksum(const xoe_packet_t* packet)
  */
 int serial_protocol_validate_checksum(const xoe_packet_t* packet)
 {
-    uint32_t calculated_checksum;
+    uint32_t calculated_checksum = 0;
 
     if (packet == NULL) {
         return E_INVALID_ARGUMENT;

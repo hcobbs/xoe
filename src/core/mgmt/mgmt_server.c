@@ -111,10 +111,10 @@ ssize_t mgmt_read(mgmt_session_t *session, void *buf, size_t len) {
  * mgmt_server_start - Start management server
  */
 mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
-    mgmt_server_t *server;
-    struct sockaddr_in server_addr;
+    mgmt_server_t *server = NULL;
+    struct sockaddr_in server_addr = {0};
     int opt = 1;
-    int i;
+    int i = 0;
 
     if (config == NULL) {
         return NULL;
@@ -268,7 +268,7 @@ mgmt_server_t* mgmt_server_start(xoe_config_t *config) {
  * mgmt_server_stop - Stop management server
  */
 void mgmt_server_stop(mgmt_server_t *server) {
-    int i;
+    int i = 0;
 
     if (server == NULL) {
         return;
@@ -329,7 +329,7 @@ void mgmt_server_stop(mgmt_server_t *server) {
  */
 int mgmt_server_get_active_sessions(mgmt_server_t *server) {
     int count = 0;
-    int i;
+    int i = 0;
 
     if (server == NULL) {
         return 0;
@@ -351,12 +351,12 @@ int mgmt_server_get_active_sessions(mgmt_server_t *server) {
  */
 static void* listener_thread(void* arg) {
     mgmt_server_t *server = (mgmt_server_t*)arg;
-    struct sockaddr_in client_addr;
-    socklen_t client_len;
-    int client_fd;
-    mgmt_session_t *session;
-    pthread_t session_thread;
-    in_addr_t client_ip;
+    struct sockaddr_in client_addr = {0};
+    socklen_t client_len = 0;
+    int client_fd = -1;
+    mgmt_session_t *session = NULL;
+    pthread_t session_thread = 0;
+    in_addr_t client_ip = 0;
 
     while (!server->shutdown_flag) {
         client_len = sizeof(client_addr);
@@ -481,8 +481,8 @@ static void* session_handler(void* arg) {
  */
 static int authenticate_session(mgmt_session_t *session) {
     const char *prompt = "Password: ";
-    ssize_t bytes_read;
-    char *newline;
+    ssize_t bytes_read = 0;
+    char *newline = NULL;
     int attempts = 0;
 
     while (attempts < 3) {
@@ -535,7 +535,7 @@ static int authenticate_session(mgmt_session_t *session) {
  */
 static mgmt_session_t* acquire_session_slot(mgmt_server_t *server) {
     mgmt_session_t *slot = NULL;
-    int i;
+    int i = 0;
 
     pthread_mutex_lock(&server->session_mutex);
     for (i = 0; i < MAX_MGMT_SESSIONS; i++) {
@@ -569,8 +569,8 @@ static void release_session_slot(mgmt_session_t *session) {
  * Automatically clears expired lockouts.
  */
 static int check_rate_limit(mgmt_server_t *server, in_addr_t ip) {
-    int i;
-    time_t now;
+    int i = 0;
+    time_t now = 0;
     int allowed = 1;
 
     if (server == NULL) {
@@ -611,10 +611,10 @@ static int check_rate_limit(mgmt_server_t *server, in_addr_t ip) {
  * Uses LRU-style replacement if table is full.
  */
 static void record_auth_failure(mgmt_server_t *server, in_addr_t ip) {
-    int i;
+    int i = 0;
     int found = -1;
     int empty = -1;
-    time_t now;
+    time_t now = 0;
 
     if (server == NULL) {
         return;
@@ -664,7 +664,7 @@ static void record_auth_failure(mgmt_server_t *server, in_addr_t ip) {
  * Removes the IP from rate limit tracking after successful authentication.
  */
 static void clear_auth_failure(mgmt_server_t *server, in_addr_t ip) {
-    int i;
+    int i = 0;
 
     if (server == NULL) {
         return;
