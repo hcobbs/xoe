@@ -37,6 +37,7 @@ extern struct mgmt_config_manager_t *g_config_manager;
 typedef enum {
     MODE_HELP,              /* Display help/usage information */
     MODE_SERVER,            /* Run as TCP/TLS server */
+    MODE_SERVER_NBD,        /* Run as NBD (Network Block Device) server */
     MODE_CLIENT_STANDARD,   /* Run as standard client (stdin/stdout) */
     MODE_CLIENT_SERIAL,     /* Run as serial bridge client */
     MODE_CLIENT_USB         /* Run as USB bridge client */
@@ -50,6 +51,7 @@ typedef enum {
     STATE_START_MGMT,       /* Start management interface (one-time) */
     STATE_MODE_SELECT,      /* Determine operating mode */
     STATE_SERVER_MODE,      /* Execute server mode */
+    STATE_SERVER_NBD,       /* Execute NBD server mode */
     STATE_CLIENT_STD,       /* Execute standard client mode */
     STATE_CLIENT_SERIAL,    /* Execute serial bridge client mode */
     STATE_CLIENT_USB,       /* Execute USB bridge client mode */
@@ -76,6 +78,9 @@ typedef struct {
     char *serial_device;                /* Serial device path */
     int use_usb;                        /* USB mode flag */
     void *usb_config;                   /* Opaque pointer to usb_multi_config_t */
+    int use_nbd;                        /* NBD mode flag */
+    void *nbd_config;                   /* Opaque pointer to nbd_config_t */
+    void *nbd_backend;                  /* Opaque pointer to nbd_backend_t */
     char *program_name;                 /* Program name for usage output */
     int exit_code;                      /* Exit code for application */
     int server_fd;                      /* Server connection file descriptor */
@@ -91,6 +96,7 @@ xoe_state_t state_validate_config(xoe_config_t *config);
 xoe_state_t state_start_mgmt(xoe_config_t *config);
 xoe_state_t state_mode_select(xoe_config_t *config);
 xoe_state_t state_server_mode(xoe_config_t *config);
+xoe_state_t state_server_nbd(xoe_config_t *config);
 xoe_state_t state_client_std(xoe_config_t *config);
 xoe_state_t state_client_serial(xoe_config_t *config);
 xoe_state_t state_client_usb(xoe_config_t *config);
