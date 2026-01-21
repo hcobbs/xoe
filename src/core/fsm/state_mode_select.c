@@ -34,6 +34,11 @@ xoe_state_t state_mode_select(xoe_config_t *config) {
         return STATE_CLEANUP;
     }
 
+    /* Check for NBD server mode */
+    if (config->mode == MODE_SERVER_NBD) {
+        return STATE_SERVER_NBD;
+    }
+
     /* Determine mode based on configuration */
     if (config->connect_server_ip != NULL) {
         /* Client mode - check for USB, serial, or standard */

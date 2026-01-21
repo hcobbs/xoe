@@ -12,6 +12,7 @@
 #include "core/config.h"
 #include "lib/common/definitions.h"
 #include "connectors/serial/serial_config.h"
+#include "connectors/nbd/nbd_config.h"
 
 /**
  * state_validate_config - Validate configuration settings
@@ -47,6 +48,30 @@ xoe_state_t state_validate_config(xoe_config_t *config) {
             strncpy(serial_cfg->device_path, config->serial_device,
                     SERIAL_DEVICE_PATH_MAX - 1);
             serial_cfg->device_path[SERIAL_DEVICE_PATH_MAX - 1] = '\0';
+        }
+    }
+
+    /* Validate NBD mode configuration */
+    if (config->use_nbd) {
+        if (config->nbd_config == NULL) {
+            fprintf(stderr, "Error: NBD configuration not initialized\n");
+            config->exit_code = EXIT_FAILURE;
+            return STATE_CLEANUP;
+        }
+        {
+            nbd_config_t *nbd_cfg = (nbd_config_t*)config->nbd_config;
+            if (nbd_cfg->export_path[0] == '\0') {
+                fprintf(stderr, "Error: NBD export path not specified\n");
+                print_usage(config->program_name);
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
+            }
+            /* Validate NBD configuration */
+            if (nbd_config_validate(nbd_cfg) != 0) {
+                fprintf(stderr, "Error: Invalid NBD configuration\n");
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
+            }
         }
     }
 

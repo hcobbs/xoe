@@ -23,6 +23,7 @@
 #include "connectors/serial/serial_config.h"
 #include "connectors/usb/usb_config.h"
 #include "connectors/usb/usb_device.h"
+#include "connectors/nbd/nbd_config.h"
 
 #if TLS_ENABLED
 #include "lib/security/tls_config.h"
@@ -39,8 +40,8 @@
  * Returns: 0 on success, -1 on error (invalid input, overflow, out of range)
  */
 static int safe_strtol(const char *str, long *result, long min, long max) {
-    char *endptr;
-    long val;
+    char *endptr = NULL;
+    long val = 0;
 
     if (str == NULL || result == NULL || *str == '\0') {
         return -1;
@@ -74,11 +75,7 @@ static int safe_strtol(const char *str, long *result, long min, long max) {
  *
  * Returns: STATE_VALIDATE_CONFIG on success, STATE_CLEANUP on help/error
  *
- * Parses command-line options in two phases:
- * 1. Short options via getopt: -i, -p, -c, -e, -s, -b, -h
- * 2. Long options via manual parsing: --cert, --key, --parity, --databits,
- *    --stopbits, --flow
- *
+ * Parses short-only command-line options via getopt.
  * Updates config structure with parsed values and validates input ranges.
  */
 xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
@@ -90,7 +87,8 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
     config->program_name = argv[0];
 
     /* Phase 1: Parse short options with getopt (+ stops at first non-option) */
-    while ((opt = getopt(argc, argv, "+i:p:c:e:s:b:u:h")) != -1) {
+    opterr = 0;  /* Suppress getopt error messages */
+    while ((opt = getopt(argc, argv, "+i:p:c:e:s:b:u:C:K:A:Vn:P:D:S:F:I:E:O:T:Llh")) != -1) {
         switch (opt) {
             case 'i':
                 config->listen_address = optarg;
@@ -226,182 +224,158 @@ xoe_state_t state_parse_args(xoe_config_t *config, int argc, char *argv[]) {
                 break;
             }
 
-            case 'h':
-                print_usage(config->program_name);
-                config->mode = MODE_HELP;
-                config->exit_code = EXIT_SUCCESS;
-                return STATE_CLEANUP;
-
-            default:
-                /* Unknown option - might be a long option, let Phase 2 handle it */
-                /* Reset optind to re-process this argument in Phase 2 */
-                if (optind > 0) optind--;
-                goto phase2;  /* Jump to Phase 2 to handle long options */
-        }
-    }
-
-phase2:
-
-    /* Phase 2: Parse long options manually */
-    while (optind < argc) {
+            case 'C':
 #if TLS_ENABLED
-        if (strcmp(argv[optind], "-cert") == 0 || strcmp(argv[optind], "--cert") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option %s requires an argument\n", argv[optind]);
-                print_usage(config->program_name);
+                strncpy(config->cert_path, optarg, TLS_CERT_PATH_MAX - 1);
+                config->cert_path[TLS_CERT_PATH_MAX - 1] = '\0';
+#else
+                fprintf(stderr, "TLS support not compiled in.\n");
                 config->exit_code = EXIT_FAILURE;
                 return STATE_CLEANUP;
-            }
-            strncpy(config->cert_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
-            config->cert_path[TLS_CERT_PATH_MAX - 1] = '\0';
-            optind += 2;
-        } else if (strcmp(argv[optind], "-key") == 0 || strcmp(argv[optind], "--key") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option %s requires an argument\n", argv[optind]);
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
-            }
-            strncpy(config->key_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
-            config->key_path[TLS_CERT_PATH_MAX - 1] = '\0';
-            optind += 2;
-        } else if (strcmp(argv[optind], "-ca") == 0 || strcmp(argv[optind], "--ca") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option %s requires an argument\n", argv[optind]);
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
-            }
-            strncpy(config->ca_path, argv[optind + 1], TLS_CERT_PATH_MAX - 1);
-            config->ca_path[TLS_CERT_PATH_MAX - 1] = '\0';
-            optind += 2;
-        } else if (strcmp(argv[optind], "--insecure") == 0) {
-            /* Disable TLS certificate verification (not recommended for production) */
-            config->tls_verify_mode = TLS_VERIFY_NONE;
-            fprintf(stderr, "WARNING: TLS certificate verification disabled. "
-                    "Use only for testing.\n");
-            optind += 1;
-        } else
 #endif
-        if (strcmp(argv[optind], "--parity") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --parity requires an argument\n");
-                print_usage(config->program_name);
+                break;
+
+            case 'K':
+#if TLS_ENABLED
+                strncpy(config->key_path, optarg, TLS_CERT_PATH_MAX - 1);
+                config->key_path[TLS_CERT_PATH_MAX - 1] = '\0';
+#else
+                fprintf(stderr, "TLS support not compiled in.\n");
                 config->exit_code = EXIT_FAILURE;
                 return STATE_CLEANUP;
-            }
-            if (serial_cfg != NULL) {
-                if (strcmp(argv[optind + 1], "none") == 0) {
-                    serial_cfg->parity = SERIAL_PARITY_NONE;
-                } else if (strcmp(argv[optind + 1], "even") == 0) {
-                    serial_cfg->parity = SERIAL_PARITY_EVEN;
-                } else if (strcmp(argv[optind + 1], "odd") == 0) {
-                    serial_cfg->parity = SERIAL_PARITY_ODD;
-                } else {
-                    fprintf(stderr, "Invalid parity: %s (use none, even, or odd)\n",
-                            argv[optind + 1]);
-                    config->exit_code = EXIT_FAILURE;
-                    return STATE_CLEANUP;
+#endif
+                break;
+
+            case 'A':
+#if TLS_ENABLED
+                strncpy(config->ca_path, optarg, TLS_CERT_PATH_MAX - 1);
+                config->ca_path[TLS_CERT_PATH_MAX - 1] = '\0';
+#else
+                fprintf(stderr, "TLS support not compiled in.\n");
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
+#endif
+                break;
+
+            case 'V':
+#if TLS_ENABLED
+                config->tls_verify_mode = TLS_VERIFY_NONE;
+                fprintf(stderr, "WARNING: TLS certificate verification disabled. "
+                        "Use only for testing.\n");
+#else
+                fprintf(stderr, "TLS support not compiled in.\n");
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
+#endif
+                break;
+
+            case 'n':
+                config->use_nbd = TRUE;
+                if (config->nbd_config == NULL) {
+                    config->nbd_config = malloc(sizeof(nbd_config_t));
+                    if (config->nbd_config == NULL) {
+                        fprintf(stderr, "Error: Failed to allocate NBD configuration\n");
+                        config->exit_code = EXIT_FAILURE;
+                        return STATE_CLEANUP;
+                    }
+                    if (nbd_config_init_defaults((nbd_config_t*)config->nbd_config) != 0) {
+                        fprintf(stderr, "Error: Failed to initialize NBD configuration\n");
+                        free(config->nbd_config);
+                        config->nbd_config = NULL;
+                        config->exit_code = EXIT_FAILURE;
+                        return STATE_CLEANUP;
+                    }
                 }
-            }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--databits") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --databits requires an argument\n");
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
-            }
-            if (serial_cfg != NULL) {
-                long bits;
-                if (safe_strtol(argv[optind + 1], &bits, 7, 8) != 0 ||
-                    (bits != 7 && bits != 8)) {
-                    fprintf(stderr, "Invalid data bits: %s (use 7 or 8)\n", argv[optind + 1]);
-                    config->exit_code = EXIT_FAILURE;
-                    return STATE_CLEANUP;
+                {
+                    nbd_config_t *nbd_cfg = (nbd_config_t*)config->nbd_config;
+                    strncpy(nbd_cfg->export_path, optarg, NBD_PATH_MAX - 1);
+                    nbd_cfg->export_path[NBD_PATH_MAX - 1] = '\0';
                 }
-                serial_cfg->data_bits = (int)bits;
-            }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--stopbits") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --stopbits requires an argument\n");
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
-            }
-            if (serial_cfg != NULL) {
-                long bits;
-                if (safe_strtol(argv[optind + 1], &bits, 1, 2) != 0 ||
-                    (bits != 1 && bits != 2)) {
-                    fprintf(stderr, "Invalid stop bits: %s (use 1 or 2)\n", argv[optind + 1]);
-                    config->exit_code = EXIT_FAILURE;
-                    return STATE_CLEANUP;
+                config->mode = MODE_SERVER_NBD;
+                break;
+
+            case 'P':
+                if (serial_cfg != NULL) {
+                    if (strcmp(optarg, "none") == 0) {
+                        serial_cfg->parity = SERIAL_PARITY_NONE;
+                    } else if (strcmp(optarg, "even") == 0) {
+                        serial_cfg->parity = SERIAL_PARITY_EVEN;
+                    } else if (strcmp(optarg, "odd") == 0) {
+                        serial_cfg->parity = SERIAL_PARITY_ODD;
+                    } else {
+                        fprintf(stderr, "Invalid parity: %s (use none, even, or odd)\n", optarg);
+                        config->exit_code = EXIT_FAILURE;
+                        return STATE_CLEANUP;
+                    }
                 }
-                serial_cfg->stop_bits = (int)bits;
-            }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--flow") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --flow requires an argument\n");
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
-            }
-            if (serial_cfg != NULL) {
-                if (strcmp(argv[optind + 1], "none") == 0) {
-                    serial_cfg->flow_control = SERIAL_FLOW_NONE;
-                } else if (strcmp(argv[optind + 1], "xonxoff") == 0) {
-                    serial_cfg->flow_control = SERIAL_FLOW_XONXOFF;
-                } else if (strcmp(argv[optind + 1], "rtscts") == 0) {
-                    serial_cfg->flow_control = SERIAL_FLOW_RTSCTS;
-                } else {
-                    fprintf(stderr, "Invalid flow control: %s (use none, xonxoff, or rtscts)\n",
-                            argv[optind + 1]);
-                    config->exit_code = EXIT_FAILURE;
-                    return STATE_CLEANUP;
+                break;
+
+            case 'D':
+                if (serial_cfg != NULL) {
+                    long bits;
+                    if (safe_strtol(optarg, &bits, 7, 8) != 0 ||
+                        (bits != 7 && bits != 8)) {
+                        fprintf(stderr, "Invalid data bits: %s (use 7 or 8)\n", optarg);
+                        config->exit_code = EXIT_FAILURE;
+                        return STATE_CLEANUP;
+                    }
+                    serial_cfg->data_bits = (int)bits;
                 }
-            }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--interface") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --interface requires an argument\n");
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
-            }
-            /* Apply to most recently added USB device */
-            {
+                break;
+
+            case 'S':
+                if (serial_cfg != NULL) {
+                    long bits;
+                    if (safe_strtol(optarg, &bits, 1, 2) != 0 ||
+                        (bits != 1 && bits != 2)) {
+                        fprintf(stderr, "Invalid stop bits: %s (use 1 or 2)\n", optarg);
+                        config->exit_code = EXIT_FAILURE;
+                        return STATE_CLEANUP;
+                    }
+                    serial_cfg->stop_bits = (int)bits;
+                }
+                break;
+
+            case 'F':
+                if (serial_cfg != NULL) {
+                    if (strcmp(optarg, "none") == 0) {
+                        serial_cfg->flow_control = SERIAL_FLOW_NONE;
+                    } else if (strcmp(optarg, "xonxoff") == 0) {
+                        serial_cfg->flow_control = SERIAL_FLOW_XONXOFF;
+                    } else if (strcmp(optarg, "rtscts") == 0) {
+                        serial_cfg->flow_control = SERIAL_FLOW_RTSCTS;
+                    } else {
+                        fprintf(stderr, "Invalid flow control: %s (use none, xonxoff, or rtscts)\n",
+                                optarg);
+                        config->exit_code = EXIT_FAILURE;
+                        return STATE_CLEANUP;
+                    }
+                }
+                break;
+
+            case 'I': {
                 usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
                 long interface_num;
-                if (safe_strtol(argv[optind + 1], &interface_num, 0, 255) != 0) {
-                    fprintf(stderr, "Invalid interface number: %s\n", argv[optind + 1]);
+                if (safe_strtol(optarg, &interface_num, 0, 255) != 0) {
+                    fprintf(stderr, "Invalid interface number: %s\n", optarg);
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
                 if (usb_multi != NULL && usb_multi->device_count > 0) {
                     usb_multi->devices[usb_multi->device_count - 1].interface_number = (int)interface_num;
                 } else {
-                    fprintf(stderr, "Error: --interface must follow -u option\n");
+                    fprintf(stderr, "Error: -I must follow -u option\n");
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
+                break;
             }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--ep-in") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --ep-in requires an argument\n");
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
-            }
-            /* Apply to most recently added USB device */
-            {
+
+            case 'E': {
                 usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
                 unsigned int ep_addr = 0;
-                if (sscanf(argv[optind + 1], "%x", &ep_addr) != 1 || ep_addr > 0xFF) {
-                    fprintf(stderr, "Invalid endpoint address: %s (use hex, e.g., 81)\n",
-                            argv[optind + 1]);
+                if (sscanf(optarg, "%x", &ep_addr) != 1 || ep_addr > 0xFF) {
+                    fprintf(stderr, "Invalid endpoint address: %s (use hex, e.g., 81)\n", optarg);
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
@@ -409,26 +383,18 @@ phase2:
                     usb_multi->devices[usb_multi->device_count - 1].bulk_in_endpoint =
                         (uint8_t)ep_addr;
                 } else {
-                    fprintf(stderr, "Error: --ep-in must follow -u option\n");
+                    fprintf(stderr, "Error: -E must follow -u option\n");
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
+                break;
             }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--ep-out") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --ep-out requires an argument\n");
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
-            }
-            /* Apply to most recently added USB device */
-            {
+
+            case 'O': {
                 usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
                 unsigned int ep_addr = 0;
-                if (sscanf(argv[optind + 1], "%x", &ep_addr) != 1 || ep_addr > 0xFF) {
-                    fprintf(stderr, "Invalid endpoint address: %s (use hex, e.g., 01)\n",
-                            argv[optind + 1]);
+                if (sscanf(optarg, "%x", &ep_addr) != 1 || ep_addr > 0xFF) {
+                    fprintf(stderr, "Invalid endpoint address: %s (use hex, e.g., 01)\n", optarg);
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
@@ -436,26 +402,18 @@ phase2:
                     usb_multi->devices[usb_multi->device_count - 1].bulk_out_endpoint =
                         (uint8_t)ep_addr;
                 } else {
-                    fprintf(stderr, "Error: --ep-out must follow -u option\n");
+                    fprintf(stderr, "Error: -O must follow -u option\n");
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
+                break;
             }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--ep-int") == 0) {
-            if (optind + 1 >= argc) {
-                fprintf(stderr, "Option --ep-int requires an argument\n");
-                print_usage(config->program_name);
-                config->exit_code = EXIT_FAILURE;
-                return STATE_CLEANUP;
-            }
-            /* Apply to most recently added USB device */
-            {
+
+            case 'T': {
                 usb_multi_config_t *usb_multi = (usb_multi_config_t*)config->usb_config;
                 unsigned int ep_addr = 0;
-                if (sscanf(argv[optind + 1], "%x", &ep_addr) != 1 || ep_addr > 0xFF) {
-                    fprintf(stderr, "Invalid endpoint address: %s (use hex, e.g., 83)\n",
-                            argv[optind + 1]);
+                if (sscanf(optarg, "%x", &ep_addr) != 1 || ep_addr > 0xFF) {
+                    fprintf(stderr, "Invalid endpoint address: %s (use hex, e.g., 83)\n", optarg);
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
@@ -463,15 +421,14 @@ phase2:
                     usb_multi->devices[usb_multi->device_count - 1].interrupt_in_endpoint =
                         (uint8_t)ep_addr;
                 } else {
-                    fprintf(stderr, "Error: --ep-int must follow -u option\n");
+                    fprintf(stderr, "Error: -T must follow -u option\n");
                     config->exit_code = EXIT_FAILURE;
                     return STATE_CLEANUP;
                 }
+                break;
             }
-            optind += 2;
-        } else if (strcmp(argv[optind], "--list-usb") == 0) {
-            /* List USB devices and exit */
-            {
+
+            case 'L': {
                 struct libusb_context* ctx = NULL;
                 int result = usb_device_init_library(&ctx);
                 if (result != 0) {
@@ -483,14 +440,21 @@ phase2:
                 printf("======================\n");
                 usb_device_enumerate(ctx);
                 usb_device_cleanup_library(ctx);
+                config->exit_code = EXIT_SUCCESS;
+                return STATE_CLEANUP;
             }
-            config->exit_code = EXIT_SUCCESS;
-            return STATE_CLEANUP;
-        } else {
-            fprintf(stderr, "Unknown option: %s\n", argv[optind]);
-            print_usage(config->program_name);
-            config->exit_code = EXIT_FAILURE;
-            return STATE_CLEANUP;
+
+            case 'h':
+                print_usage(config->program_name);
+                config->mode = MODE_HELP;
+                config->exit_code = EXIT_SUCCESS;
+                return STATE_CLEANUP;
+
+            default:
+                fprintf(stderr, "Unknown option: -%c\n", opt);
+                print_usage(config->program_name);
+                config->exit_code = EXIT_FAILURE;
+                return STATE_CLEANUP;
         }
     }
 

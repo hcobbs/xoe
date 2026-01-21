@@ -15,6 +15,7 @@
 #include "lib/common/definitions.h"
 #include "connectors/serial/serial_config.h"
 #include "connectors/usb/usb_config.h"
+#include "connectors/nbd/nbd_config.h"
 
 #if TLS_ENABLED
 #include "lib/security/tls_config.h"
@@ -36,10 +37,10 @@
 static char* generate_random_password(int length) {
     static const char charset[] =
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    char *password;
-    int i;
-    int fd;
-    unsigned char random_bytes[64];  /* Buffer for random data */
+    char *password = NULL;
+    int i = 0;
+    int fd = -1;
+    unsigned char random_bytes[64] = {0};  /* Buffer for random data */
 
     if (length <= 0 || length > 64) {
         return NULL;
@@ -119,6 +120,11 @@ xoe_state_t state_init(xoe_config_t *config) {
         config->exit_code = EXIT_FAILURE;
         return STATE_CLEANUP;
     }
+
+    /* Initialize NBD configuration */
+    config->use_nbd = FALSE;
+    config->nbd_config = NULL;
+    config->nbd_backend = NULL;
 
     /* Initialize connection file descriptor */
     config->server_fd = -1;
