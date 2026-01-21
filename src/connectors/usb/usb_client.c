@@ -419,7 +419,15 @@ int usb_client_stop(usb_client_t* client)
     pthread_cond_broadcast(&client->shutdown_cond);
     pthread_mutex_unlock(&client->lock);
 
-    /* Phase 4: Wait for transfer threads to exit */
+    /* Phase 4: Close USB devices to force blocked transfers to abort */
+    printf("Closing USB devices to unblock transfer threads...\n");
+    for (i = 0; i < client->device_count; i++) {
+        if (client->devices[i].handle != NULL) {
+            usb_device_close(&client->devices[i]);
+        }
+    }
+
+    /* Phase 4.5: Wait for transfer threads to exit */
     printf("Waiting for transfer threads to exit...\n");
     for (i = 0; i < client->device_count; i++) {
         if (client->transfer_threads[i] != 0) {
@@ -1385,9 +1393,14 @@ void usb_client_free_pending_request(
     /* Suppress -Wunused-but-set-variable when request not found in list */
     (void)prev;
 
+    /* Lock request mutex BEFORE releasing pending_lock to prevent race
+     * with usb_client_complete_pending_request. This ensures the completion
+     * handler cannot acquire request->mutex while we're destroying it. */
+    pthread_mutex_lock(&request->mutex);
     pthread_mutex_unlock(&client->pending_lock);
 
-    /* Destroy synchronization primitives */
+    /* Request is now safe to destroy (completion handler can't access it) */
+    pthread_mutex_unlock(&request->mutex);
     pthread_mutex_destroy(&request->mutex);
     pthread_cond_destroy(&request->cond);
 

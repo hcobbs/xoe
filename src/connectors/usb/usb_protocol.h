@@ -48,6 +48,9 @@
 #define USB_MAX_DATA_SIZE       4048    /* Max transfer data */
 #define USB_MAX_TRANSFER_SIZE   4048    /* Max bytes per transfer (alias) */
 
+/* Wire format constants */
+#define USB_URB_HEADER_WIRE_SIZE 36     /* Packed wire size (no padding) */
+
 /**
  * @brief USB URB (USB Request Block) header structure
  *
@@ -72,7 +75,7 @@ typedef struct {
     int32_t  status;            /* Transfer status (libusb codes) */
     uint8_t  setup[8];          /* Control setup packet */
     /* Followed by transfer data */
-} usb_urb_header_t;
+} __attribute__((packed)) usb_urb_header_t;
 
 /**
  * @brief Encapsulate USB URB into XOE packet
