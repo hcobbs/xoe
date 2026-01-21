@@ -28,7 +28,10 @@
 typedef struct {
     int socket_fd;                      /* Client socket */
     uint32_t device_id;                 /* USB device ID (VID:PID) */
+    uint8_t device_class;               /* USB device class */
     int in_use;                         /* Slot in use flag */
+    int authenticated;                  /* Authentication status */
+    char client_ip[46];                 /* Client IP (IPv6-ready) */
     pthread_mutex_t send_lock;          /* Mutex for send operations */
 } usb_client_entry_t;
 
@@ -43,10 +46,17 @@ typedef struct usb_server_t {
     usb_client_entry_t clients[USB_MAX_CLIENTS];
     pthread_mutex_t registry_lock;      /* Registry modification lock */
 
+    /* Security configuration */
+    char auth_secret[USB_AUTH_SECRET_MAX];  /* Shared secret for auth */
+    uint8_t allowed_classes[16];            /* Device class whitelist */
+    int allowed_class_count;                /* Whitelist size */
+    int require_auth;                       /* Authentication required flag */
+
     /* Statistics */
     unsigned long packets_routed;       /* Total packets routed */
     unsigned long routing_errors;       /* Routing error count */
     unsigned long active_clients;       /* Number of active clients */
+    unsigned long auth_failures;        /* Authentication failures */
 } usb_server_t;
 
 /* ========================================================================

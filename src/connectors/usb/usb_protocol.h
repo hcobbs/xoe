@@ -29,6 +29,8 @@
 #define USB_RET_UNREGISTER  0x0008  /* Unregister response */
 #define USB_CMD_ENUM        0x0010  /* Device enumeration */
 #define USB_RET_ENUM        0x0011  /* Enumeration response */
+#define USB_CMD_AUTH        0x0020  /* Authentication challenge */
+#define USB_RET_AUTH        0x0021  /* Authentication response */
 
 /* USB transfer types (subset of libusb - isochronous not supported) */
 #define USB_TRANSFER_CONTROL        0
