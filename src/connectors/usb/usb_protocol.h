@@ -29,6 +29,8 @@
 #define USB_RET_UNREGISTER  0x0008  /* Unregister response */
 #define USB_CMD_ENUM        0x0010  /* Device enumeration */
 #define USB_RET_ENUM        0x0011  /* Enumeration response */
+#define USB_CMD_AUTH        0x0020  /* Authentication challenge */
+#define USB_RET_AUTH        0x0021  /* Authentication response */
 
 /* USB transfer types (subset of libusb - isochronous not supported) */
 #define USB_TRANSFER_CONTROL        0
@@ -47,6 +49,9 @@
 #define USB_MAX_PAYLOAD_SIZE    4096    /* URB header + data */
 #define USB_MAX_DATA_SIZE       4048    /* Max transfer data */
 #define USB_MAX_TRANSFER_SIZE   4048    /* Max bytes per transfer (alias) */
+
+/* Wire format constants */
+#define USB_URB_HEADER_WIRE_SIZE 36     /* Packed wire size (no padding) */
 
 /**
  * @brief USB URB (USB Request Block) header structure
@@ -72,7 +77,7 @@ typedef struct {
     int32_t  status;            /* Transfer status (libusb codes) */
     uint8_t  setup[8];          /* Control setup packet */
     /* Followed by transfer data */
-} usb_urb_header_t;
+} __attribute__((packed)) usb_urb_header_t;
 
 /**
  * @brief Encapsulate USB URB into XOE packet

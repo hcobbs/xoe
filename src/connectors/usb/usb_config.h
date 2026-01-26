@@ -17,9 +17,20 @@
 #define USB_DEVICE_DESC_MAX     256
 #define USB_MAX_ENDPOINTS       16
 #define USB_MAX_DEVICES         8   /* Max simultaneous devices */
+#define USB_AUTH_SECRET_MAX     64  /* Max shared secret length */
 
 /* Endpoint sentinel value */
 #define USB_NO_ENDPOINT         0xFF
+
+/* USB device classes (for whitelist) */
+#define USB_CLASS_AUDIO         0x01
+#define USB_CLASS_CDC           0x02
+#define USB_CLASS_HID           0x03  /* Human Interface Device */
+#define USB_CLASS_PRINTER       0x07
+#define USB_CLASS_MASS_STORAGE  0x08
+#define USB_CLASS_HUB           0x09
+#define USB_CLASS_VIDEO         0x0E
+#define USB_CLASS_ANY           0xFF  /* Accept any class */
 
 /* Default values */
 #define USB_DEFAULT_TIMEOUT_MS      5000

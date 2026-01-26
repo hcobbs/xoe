@@ -176,8 +176,8 @@ int usb_protocol_encapsulate(
         return E_INVALID_ARGUMENT;
     }
 
-    /* Calculate total payload size */
-    total_size = sizeof(usb_urb_header_t) + data_len;
+    /* Calculate total payload size using wire format constant */
+    total_size = USB_URB_HEADER_WIRE_SIZE + data_len;
     if (total_size > USB_MAX_PAYLOAD_SIZE) {
         return E_INVALID_ARGUMENT;
     }
@@ -193,7 +193,7 @@ int usb_protocol_encapsulate(
 
     /* Copy transfer data if present */
     if (transfer_data != NULL && data_len > 0) {
-        memcpy(payload_buffer + sizeof(usb_urb_header_t),
+        memcpy(payload_buffer + USB_URB_HEADER_WIRE_SIZE,
                transfer_data,
                data_len);
     }
@@ -257,8 +257,8 @@ int usb_protocol_decapsulate(
         return E_PROTOCOL_ERROR;
     }
 
-    /* Validate payload size */
-    if (packet->payload->len < sizeof(usb_urb_header_t)) {
+    /* Validate payload size using wire format constant (not sizeof) */
+    if (packet->payload->len < USB_URB_HEADER_WIRE_SIZE) {
         return E_PROTOCOL_ERROR;
     }
 
@@ -272,13 +272,13 @@ int usb_protocol_decapsulate(
     /* Deserialize URB header from network byte order */
     deserialize_urb_header(urb_header, payload_buffer);
 
-    /* Calculate data length */
-    payload_data_len = packet->payload->len - sizeof(usb_urb_header_t);
+    /* Calculate data length using wire format constant */
+    payload_data_len = packet->payload->len - USB_URB_HEADER_WIRE_SIZE;
 
     /* Verify checksum BEFORE copying data (use original packet data) */
     calculated_checksum = usb_protocol_checksum(
         urb_header,
-        payload_data_len > 0 ? (payload_buffer + sizeof(usb_urb_header_t)) : NULL,
+        payload_data_len > 0 ? (payload_buffer + USB_URB_HEADER_WIRE_SIZE) : NULL,
         payload_data_len
     );
 
@@ -294,7 +294,7 @@ int usb_protocol_decapsulate(
         }
 
         memcpy(transfer_data,
-               payload_buffer + sizeof(usb_urb_header_t),
+               payload_buffer + USB_URB_HEADER_WIRE_SIZE,
                payload_data_len);
     }
 

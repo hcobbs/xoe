@@ -368,8 +368,16 @@ int usb_device_get_endpoints(usb_device_t* dev,
         return map_libusb_error(result);
     }
 
-    /* Get interface descriptor */
+    /* Get interface descriptor with bounds validation (USB-005 fix) */
     if (dev->config.interface_number >= (int)config_desc->bNumInterfaces) {
+        libusb_free_config_descriptor(config_desc);
+        return E_INVALID_ARGUMENT;
+    }
+
+    /* Validate altsetting exists before access (buffer overflow prevention) */
+    if (config_desc->interface[dev->config.interface_number].num_altsetting < 1) {
+        fprintf(stderr, "Interface %d has no alternate settings\n",
+                dev->config.interface_number);
         libusb_free_config_descriptor(config_desc);
         return E_INVALID_ARGUMENT;
     }

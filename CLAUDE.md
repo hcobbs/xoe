@@ -114,7 +114,7 @@ telnet localhost 12345
 
 **Pre-PR Checklist**:
 - [ ] Code builds successfully: `make`
-- [ ] Code follows ANSI-C (C89) standards with `-std=c89 -pedantic`
+- [ ] Code follows C99 standards with `-std=c99 -pedantic`
 - [ ] No compiler warnings with `-Wall -Wextra`
 - [ ] All functions have complete documentation (purpose, parameters, return values, errors)
 - [ ] Code has complete test coverage
@@ -125,9 +125,9 @@ telnet localhost 12345
 ## Architecture
 
 ### Language Standard
-- **ANSI-C (C89)** (`-std=c89 -pedantic`) with strict warnings (`-Wall -Wextra`)
+- **C99** (`-std=c99 -pedantic`) with strict warnings (`-Wall -Wextra`)
 - Cross-platform support for Linux, macOS, and BSD (Unix/POSIX only)
-- Fixed-width integer types (`uint16_t`, `uint32_t`) defined via typedefs (C89 doesn't have `stdint.h`)
+- Fixed-width integer types via `<stdint.h>`
 
 ### Directory Structure
 ```

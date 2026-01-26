@@ -15,6 +15,7 @@
 #include "lib/common/definitions.h"
 #include "lib/net/net_resolve.h"
 #include "lib/protocol/wire_format.h"
+#include "lib/security/usb_auth.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -262,7 +263,8 @@ int usb_client_start(usb_client_t* client)
         int i;
         printf("\nRegistering USB devices with server...\n");
         for (i = 0; i < client->device_count; i++) {
-            uint32_t device_id;
+            uint32_t device_id = 0;
+            uint8_t device_class = 0;  /* TODO: Extract from USB descriptor */
 
             /* Construct device_id from VID:PID */
             device_id = ((uint32_t)client->devices[i].config.vendor_id << 16) |
@@ -274,7 +276,7 @@ int usb_client_start(usb_client_t* client)
                    client->devices[i].config.product_id,
                    device_id);
 
-            result = usb_client_register_device(client, device_id, 5000);
+            result = usb_client_register_device(client, device_id, device_class, 5000);
             if (result != 0) {
                 fprintf(stderr, "Failed to register device %d: error %d\n",
                         i + 1, result);
@@ -419,7 +421,15 @@ int usb_client_stop(usb_client_t* client)
     pthread_cond_broadcast(&client->shutdown_cond);
     pthread_mutex_unlock(&client->lock);
 
-    /* Phase 4: Wait for transfer threads to exit */
+    /* Phase 4: Close USB devices to force blocked transfers to abort */
+    printf("Closing USB devices to unblock transfer threads...\n");
+    for (i = 0; i < client->device_count; i++) {
+        if (client->devices[i].handle != NULL) {
+            usb_device_close(&client->devices[i]);
+        }
+    }
+
+    /* Phase 4.5: Wait for transfer threads to exit */
     printf("Waiting for transfer threads to exit...\n");
     for (i = 0; i < client->device_count; i++) {
         if (client->transfer_threads[i] != 0) {
@@ -630,15 +640,106 @@ int usb_client_receive_urb(usb_client_t* client,
 }
 
 /**
+ * @brief Set authentication secret for server registration
+ */
+int usb_client_set_auth_secret(usb_client_t* client, const char* secret)
+{
+    if (client == NULL) {
+        return E_INVALID_ARGUMENT;
+    }
+
+    pthread_mutex_lock(&client->lock);
+
+    if (secret == NULL || secret[0] == '\0') {
+        /* Clear secret */
+        memset(client->auth_secret, 0, sizeof(client->auth_secret));
+    } else {
+        /* Set secret (truncate if too long) */
+        strncpy(client->auth_secret, secret, USB_AUTH_SECRET_MAX - 1);
+        client->auth_secret[USB_AUTH_SECRET_MAX - 1] = '\0';
+    }
+
+    pthread_mutex_unlock(&client->lock);
+
+    return 0;
+}
+
+/**
+ * @brief Handle authentication challenge from server
+ */
+static int usb_client_handle_auth_challenge(usb_client_t* client,
+                                             const usb_urb_header_t* challenge_urb,
+                                             const void* challenge_data,
+                                             uint32_t challenge_len,
+                                             uint32_t seqnum)
+{
+    usb_auth_payload_t auth_payload;
+    usb_urb_header_t auth_urb;
+    int result = 0;
+
+    (void)challenge_urb;  /* Unused - info extracted from payload */
+
+    /* Validate challenge payload */
+    if (challenge_data == NULL || challenge_len < sizeof(usb_auth_payload_t)) {
+        fprintf(stderr, "Invalid auth challenge payload\n");
+        return E_PROTOCOL_ERROR;
+    }
+
+    /* Check if we have auth secret configured */
+    if (client->auth_secret[0] == '\0') {
+        fprintf(stderr, "Server requires authentication but no secret configured\n");
+        return E_USB_AUTH_REQUIRED;
+    }
+
+    /* Extract challenge payload */
+    memcpy(&auth_payload, challenge_data, sizeof(auth_payload));
+
+    /* Compute HMAC response */
+    result = usb_auth_compute_response(
+        client->auth_secret,
+        auth_payload.challenge,
+        auth_payload.device_id,
+        auth_payload.device_class,
+        auth_payload.response
+    );
+
+    if (result != 0) {
+        fprintf(stderr, "Failed to compute auth response: error %d\n", result);
+        return result;
+    }
+
+    /* Build auth response URB */
+    memset(&auth_urb, 0, sizeof(auth_urb));
+    auth_urb.command = USB_RET_AUTH;
+    auth_urb.seqnum = seqnum;
+    auth_urb.device_id = auth_payload.device_id;
+
+    /* Send auth response */
+    result = usb_client_send_urb(client, &auth_urb, &auth_payload,
+                                  sizeof(auth_payload));
+
+    if (result != 0) {
+        fprintf(stderr, "Failed to send auth response: error %d\n", result);
+        return result;
+    }
+
+    printf("Authentication response sent\n");
+    return 0;
+}
+
+/**
  * @brief Register device with server
  */
 int usb_client_register_device(usb_client_t* client,
                                 uint32_t device_id,
+                                uint8_t device_class,
                                 unsigned int timeout_ms)
 {
     usb_urb_header_t reg_urb, response_urb;
-    uint32_t response_len;
-    int result;
+    uint8_t response_data[USB_MAX_DATA_SIZE];
+    uint32_t response_len = 0;
+    int result = 0;
+    int auth_attempted = FALSE;
 
     /* Validate parameters */
     if (client == NULL) {
@@ -650,6 +751,7 @@ int usb_client_register_device(usb_client_t* client,
     reg_urb.command = USB_CMD_REGISTER;
     reg_urb.seqnum = usb_client_alloc_seqnum(client);
     reg_urb.device_id = device_id;
+    reg_urb.endpoint = device_class;  /* Convention: device class in endpoint field */
 
     /* Send registration request */
     result = usb_client_send_urb(client, &reg_urb, NULL, 0);
@@ -659,8 +761,7 @@ int usb_client_register_device(usb_client_t* client,
         return result;
     }
 
-    /* Wait for registration response (with timeout) */
-    /* Set socket receive timeout to prevent indefinite blocking */
+    /* Set socket receive timeout */
     if (timeout_ms > 0) {
         struct timeval tv;
         tv.tv_sec = timeout_ms / 1000;
@@ -671,11 +772,63 @@ int usb_client_register_device(usb_client_t* client,
         }
     }
 
-    response_len = 0;
-    result = usb_client_receive_urb(client, &response_urb, NULL,
+receive_response:
+    /* Wait for response */
+    response_len = sizeof(response_data);
+    result = usb_client_receive_urb(client, &response_urb, response_data,
                                      &response_len);
 
-    /* Restore socket to blocking mode (no timeout) after receive */
+    if (result != 0) {
+        fprintf(stderr, "Failed to receive registration response: error %d\n",
+                result);
+        goto cleanup_timeout;
+    }
+
+    /* Handle auth challenge */
+    if (response_urb.command == USB_CMD_AUTH && !auth_attempted) {
+        auth_attempted = TRUE;
+
+        result = usb_client_handle_auth_challenge(client, &response_urb,
+                                                   response_data, response_len,
+                                                   reg_urb.seqnum);
+        if (result != 0) {
+            fprintf(stderr, "Authentication failed: error %d\n", result);
+            goto cleanup_timeout;
+        }
+
+        /* Wait for final registration response */
+        goto receive_response;
+    }
+
+    /* Verify response is registration complete */
+    if (response_urb.command != USB_RET_REGISTER) {
+        fprintf(stderr, "Unexpected response command: 0x%04x\n",
+                response_urb.command);
+        result = E_PROTOCOL_ERROR;
+        goto cleanup_timeout;
+    }
+
+    if (response_urb.seqnum != reg_urb.seqnum) {
+        fprintf(stderr, "Sequence number mismatch: expected %u, got %u\n",
+                reg_urb.seqnum, response_urb.seqnum);
+        result = E_PROTOCOL_ERROR;
+        goto cleanup_timeout;
+    }
+
+    /* Check registration result */
+    if (response_urb.status != 0) {
+        fprintf(stderr, "Server registration failed: status %d\n",
+                response_urb.status);
+        result = response_urb.status;
+        goto cleanup_timeout;
+    }
+
+    printf("Device 0x%08x (class 0x%02x) registered with server successfully\n",
+           device_id, device_class);
+    result = 0;
+
+cleanup_timeout:
+    /* Restore socket to blocking mode */
     if (timeout_ms > 0) {
         struct timeval tv;
         tv.tv_sec = 0;
@@ -684,34 +837,7 @@ int usb_client_register_device(usb_client_t* client,
                    &tv, sizeof(tv));
     }
 
-    if (result != 0) {
-        fprintf(stderr, "Failed to receive registration response: error %d\n",
-                result);
-        return result;
-    }
-
-    /* Verify response matches request */
-    if (response_urb.command != USB_RET_REGISTER) {
-        fprintf(stderr, "Unexpected response command: 0x%04x\n",
-                response_urb.command);
-        return E_PROTOCOL_ERROR;
-    }
-
-    if (response_urb.seqnum != reg_urb.seqnum) {
-        fprintf(stderr, "Sequence number mismatch: expected %u, got %u\n",
-                reg_urb.seqnum, response_urb.seqnum);
-        return E_PROTOCOL_ERROR;
-    }
-
-    /* Check registration result */
-    if (response_urb.status != 0) {
-        fprintf(stderr, "Server registration failed: status %d\n",
-                response_urb.status);
-        return response_urb.status;
-    }
-
-    printf("Device 0x%08x registered with server successfully\n", device_id);
-    return 0;
+    return result;
 }
 
 /**
@@ -1225,9 +1351,16 @@ usb_pending_request_t* usb_client_create_pending_request(
     request->timeout_ms = timeout_ms;
     request->next = NULL;
 
-    /* Initialize synchronization */
-    pthread_mutex_init(&request->mutex, NULL);
-    pthread_cond_init(&request->cond, NULL);
+    /* Initialize synchronization (USB-006 fix: check return values) */
+    if (pthread_mutex_init(&request->mutex, NULL) != 0) {
+        free(request);
+        return NULL;
+    }
+    if (pthread_cond_init(&request->cond, NULL) != 0) {
+        pthread_mutex_destroy(&request->mutex);
+        free(request);
+        return NULL;
+    }
 
     /* Add to pending queue */
     pthread_mutex_lock(&client->pending_lock);
@@ -1385,9 +1518,14 @@ void usb_client_free_pending_request(
     /* Suppress -Wunused-but-set-variable when request not found in list */
     (void)prev;
 
+    /* Lock request mutex BEFORE releasing pending_lock to prevent race
+     * with usb_client_complete_pending_request. This ensures the completion
+     * handler cannot acquire request->mutex while we're destroying it. */
+    pthread_mutex_lock(&request->mutex);
     pthread_mutex_unlock(&client->pending_lock);
 
-    /* Destroy synchronization primitives */
+    /* Request is now safe to destroy (completion handler can't access it) */
+    pthread_mutex_unlock(&request->mutex);
     pthread_mutex_destroy(&request->mutex);
     pthread_cond_destroy(&request->cond);
 
