@@ -86,6 +86,9 @@ typedef struct {
     usb_pending_request_t* pending_head; /* Pending requests queue head */
     pthread_mutex_t pending_lock;       /* Pending queue lock */
 
+    /* Authentication */
+    char auth_secret[USB_AUTH_SECRET_MAX]; /* Shared secret for server auth */
+
     /* Statistics */
     unsigned long packets_sent;         /* Packets sent to server */
     unsigned long packets_received;     /* Packets received from server */
@@ -234,18 +237,36 @@ int usb_client_receive_urb(usb_client_t* client,
                            uint32_t* data_len);
 
 /**
+ * @brief Set authentication secret for server registration
+ *
+ * Configures the shared secret used for challenge-response authentication
+ * when registering devices with the server.
+ *
+ * @param client Client context
+ * @param secret Shared secret string (max USB_AUTH_SECRET_MAX chars)
+ * @return 0 on success, negative error code on failure
+ */
+int usb_client_set_auth_secret(usb_client_t* client, const char* secret);
+
+/**
  * @brief Register device with server
  *
  * Sends registration request to server and waits for confirmation.
+ * Handles challenge-response authentication if required by server.
  * This must be called after connecting to server and before sending URBs.
  *
  * @param client Client context
  * @param device_id Device identifier (VID:PID) to register
+ * @param device_class USB device class code
  * @param timeout_ms Timeout in milliseconds
  * @return 0 on success, negative error code on failure
+ *
+ * Note: If server requires authentication, client must have auth_secret set
+ *       via usb_client_set_auth_secret() before calling this function.
  */
 int usb_client_register_device(usb_client_t* client,
                                 uint32_t device_id,
+                                uint8_t device_class,
                                 unsigned int timeout_ms);
 
 /**

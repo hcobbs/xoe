@@ -2,7 +2,7 @@
 
 # Compiler and flags
 CC = gcc
-CFLAGS = -Wall -Wextra -g -std=c89 -pedantic -DTLS_ENABLED=1
+CFLAGS = -Wall -Wextra -g -std=c99 -pedantic -DTLS_ENABLED=1
 
 # Address Sanitizer flags (enabled with make asan or make test-asan)
 ASAN_FLAGS = -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer

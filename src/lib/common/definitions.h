@@ -49,4 +49,10 @@
 #define E_USB_STALL            -109  /* Endpoint stalled */
 #define E_USB_PROTOCOL_ERROR   -110  /* Protocol error */
 
+/* USB Authentication Error Definitions */
+#define E_USB_AUTH_REQUIRED    -111  /* Authentication required */
+#define E_USB_AUTH_FAILED      -112  /* Authentication failed */
+#define E_USB_CLASS_BLOCKED    -113  /* Device class not allowed */
+#define E_USB_AUTH_TIMEOUT     -114  /* Authentication timeout */
+
 #endif /* COMMON_DEFINITIONS_H */
