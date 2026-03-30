@@ -2,32 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Model Selection Strategy
-
-This project uses different Claude models optimized for specific task types:
-
-**Claude Opus 4.5** (`model="opus"`):
-- Planning and architectural design (Plan agent)
-- Code reviews and PR analysis
-- Complex debugging and root cause analysis
-- Critical design decisions requiring maximum reasoning capability
-
-**Claude Sonnet 4.5** (`model="sonnet"`):
-- General code development and implementation
-- Feature implementation based on approved plans
-- Code refactoring and improvements
-- Most day-to-day coding tasks (default for implementation)
-
-**Claude Haiku 4** (`model="haiku"`):
-- Git operations (commits, branches, PRs)
-- Simple file operations and quick fixes
-- Trivial edits and repetitive tasks
-- Fast turnaround tasks where speed matters
-
-When spawning agents via the Task tool, Claude Code should select the appropriate model based on task complexity and type. This strategy optimizes for capability where it matters most while maintaining cost-effectiveness for routine work.
-
-**Note**: This model selection strategy applies both to xoe and project-wide across all repositories in the workspace.
-
 ## Project Overview
 
 XOE (X over Ethernet) is an extensible framework for encapsulation of various new and legacy protocols into Ethernet-transmissible data. Implements:
@@ -94,6 +68,11 @@ telnet localhost 12345
 - `bugfix/<description>` - Bug fixes
 - `refactor/<description>` - Code refactoring
 - `test/<description>` - Test additions or improvements
+
+**LLM Attribution**: All LLM contributions are attributed to "Aida". No Anthropic, Claude, or third-party AI branding appears anywhere.
+
+- Commit co-author line: `Co-Authored-By: Aida <hello@rhythmofshadowstudios.com>`
+- PR description footer: `🤖 Generated with Aida (https://rhythmofshadowstudios.com)`
 
 **Commit Label Types**:
 - `[CLASSIC]` - Traditional hand-coded implementation without AI assistance
